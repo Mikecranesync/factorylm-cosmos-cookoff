@@ -98,12 +98,8 @@ Additionally, **ffmpeg** must be in your PATH for video recording (MP4 assembly 
 
 The Cosmos Reason2-8B model requires a HuggingFace account with model access accepted.
 
-- **Doppler project:** `openclaw/dev`
-- **Doppler key:** `HF_TOKEN`
-- Retrieve with: `doppler run --project openclaw --config dev -- printenv HF_TOKEN`
-- Or set manually: `export HF_TOKEN=hf_...`
-
-Accept the model license at: https://huggingface.co/nvidia/Cosmos-Reason2-8B
+- Set the token: `export HF_TOKEN=hf_...`
+- Accept the model license at: https://huggingface.co/nvidia/Cosmos-Reason2-8B
 
 ### 2.4 vastai CLI
 

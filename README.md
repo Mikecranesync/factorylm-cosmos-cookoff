@@ -27,6 +27,8 @@ FactoryLM Vision captures a live frame from the factory floor and reads real-tim
 
 A technician texts their factory from their phone. The AI answers.
 
+Next: AR glasses on the factory floor — look at a machine, ask what's wrong, see the diagnosis in your field of view.
+
 ---
 
 ## Architecture

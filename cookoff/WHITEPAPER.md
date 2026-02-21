@@ -536,6 +536,47 @@ technician as correct becomes a training example. Over weeks, the rule engine in
 `diagnosis/conveyor_faults.py` grows richer, and the system progressively requires less cloud AI
 intervention for common fault patterns — reducing both cost and latency.
 
+### 6.6 Phase 7: AR-First Interface — Brilliant Labs Halo
+
+The interface arc so far: Phase 4 gave technicians the ability to text their factory from a phone.
+Phase 5 adds a real-time dashboard. Phase 7 eliminates the screen entirely — the technician looks
+at a machine, asks what's wrong, and sees the diagnosis in their field of view.
+
+**Brilliant Labs Halo** is an open-source pair of AI glasses: 40 grams, microOLED heads-up
+display, dual cameras, bone conduction audio, and a Python SDK over BLE. It is the missing
+interface layer for FactoryLM Vision.
+
+**What Halo unlocks for FactoryLM Vision:**
+
+- **First-person capture.** The technician's point of view replaces fixed cameras. Cosmos R2 sees
+  exactly what the technician sees — not a static scene from a wall-mounted camera, but the fault
+  the technician is already looking at. The most relevant frame arrives automatically because the
+  technician naturally looks at the problem.
+
+- **Hands-free diagnosis.** The technician speaks a query through the bone conduction microphone
+  ("What's wrong with this motor?") and the diagnosis renders on the microOLED HUD overlay — no
+  phone to pull out, no screen to unlock, hands stay on the machine where they belong.
+
+- **Spatial context.** A fixed camera requires the technician to describe which machine they mean.
+  With Halo, the technician's gaze *is* the selector. They look at the fault, ask the question,
+  and Cosmos R2 receives the exact visual context it needs — no screen capture choreography.
+
+- **Persistent memory.** Halo's Noa agent remembers what the technician saw on the previous shift.
+  Combined with FactoryLM's Layer 0 knowledge distillation pipeline, the system learns from every
+  shift: diagnoses confirmed yesterday become deterministic rules today, and the technician's
+  visual history provides the training signal.
+
+- **Walk-up diagnostics.** No phone. No dashboard. No login. Approach a machine, ask "what's
+  wrong?", see the answer overlaid on reality. The diagnostic interface has zero interaction cost.
+
+**Integration path:** Halo's open-source Python SDK (`frame-ble` / `frame-msg` over BLE) captures
+a frame from the Halo camera and pipes it to `diagnosis_engine.py` alongside a live PLC read via
+Modbus TCP. Cosmos R2 produces the diagnosis. The structured result is rendered back to Halo's
+microOLED HUD as a concise overlay — fault code, severity, recommended action — while the full
+chain-of-thought reasoning is logged for dashboard review.
+
+**The punchline:** The interface disappears. The technician just works.
+
 ---
 
 ## 7. Reproducibility

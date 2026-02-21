@@ -81,6 +81,8 @@
 **[SCREEN: GitHub URL + FactoryLM logo]**
 
 > "FactoryLM Vision. Open source. Link in the description."
+>
+> "And next — we're putting this on AR glasses. A technician walks up to a machine, looks at it, asks 'what's wrong?' — and the diagnosis appears in their field of view. No phone. No dashboard. The interface disappears."
 
 ---
 
