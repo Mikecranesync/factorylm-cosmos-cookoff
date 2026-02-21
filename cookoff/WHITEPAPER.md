@@ -536,6 +536,14 @@ technician as correct becomes a training example. Over weeks, the rule engine in
 `diagnosis/conveyor_faults.py` grows richer, and the system progressively requires less cloud AI
 intervention for common fault patterns — reducing both cost and latency.
 
+**Time-Series Storage Path:** The demo uses SQLite with ISO-8601 timestamps for tag history
+storage — sufficient for proof-of-concept time-window queries (e.g. "last 60 seconds of tag
+snapshots"). The production path replaces SQLite with **TimescaleDB** (a PostgreSQL extension
+optimized for time-series workloads), which provides automatic partitioning by time
+(hypertables), built-in downsampling via continuous aggregates, and sub-millisecond range queries
+over months of tag history. The Matrix API's `GET /api/tags?seconds=N` interface remains
+identical — only the storage backend changes.
+
 ### 6.6 Phase 7: AR-First Interface — Brilliant Labs Halo
 
 The interface arc so far: Phase 4 gave technicians the ability to text their factory from a phone.

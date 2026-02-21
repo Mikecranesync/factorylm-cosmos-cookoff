@@ -229,19 +229,26 @@ async def ingest_tag(tag: TagPayload):
 
 
 @app.get("/api/tags")
-async def list_tags(limit: int = 50, node_id: str | None = None):
-    """List recent tag snapshots."""
+async def list_tags(limit: int = 50, node_id: str | None = None, seconds: int | None = None):
+    """List recent tag snapshots, optionally filtered by time window."""
     conn = get_db()
     try:
+        clauses: list[str] = []
+        params: list = []
+
         if node_id:
-            rows = conn.execute(
-                "SELECT * FROM tag_snapshots WHERE node_id=? ORDER BY id DESC LIMIT ?",
-                (node_id, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM tag_snapshots ORDER BY id DESC LIMIT ?", (limit,)
-            ).fetchall()
+            clauses.append("node_id = ?")
+            params.append(node_id)
+        if seconds is not None:
+            clauses.append("timestamp >= datetime('now', ?)")
+            params.append(f"-{seconds} seconds")
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        rows = conn.execute(
+            f"SELECT * FROM tag_snapshots {where} ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

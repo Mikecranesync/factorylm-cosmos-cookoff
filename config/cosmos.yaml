@@ -7,6 +7,9 @@ cosmos:
   fallback_model: "meta/llama-3.1-70b-instruct"
   api_base_url: "https://integrate.api.nvidia.com/v1"
 
+  # Matrix API endpoint (tag history source)
+  matrix_url: "http://localhost:8000"
+
   # API key is read from env: NVIDIA_COSMOS_API_KEY
   # Never put secrets in this file.
 

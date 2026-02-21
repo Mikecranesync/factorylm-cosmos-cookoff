@@ -16,6 +16,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+import httpx
+
 from cosmos.client import CosmosClient
 from cosmos.models import CosmosInsight
 
@@ -30,6 +32,7 @@ class CosmosAgent:
         self.enabled: bool = False
         self.api_key: str = os.getenv("NVIDIA_COSMOS_API_KEY", "")
         self._config: dict = {}
+        self.matrix_url: str = os.getenv("MATRIX_URL", "http://localhost:8000")
         self.client = CosmosClient(config_path=config_path)
 
         if cfg_file.exists():
@@ -40,6 +43,7 @@ class CosmosAgent:
                     raw = yaml.safe_load(f) or {}
                 self._config = raw.get("cosmos", {})
                 self.enabled = bool(self._config.get("enabled", False))
+                self.matrix_url = self._config.get("matrix_url", self.matrix_url)
             except ImportError:
                 logger.warning(
                     "PyYAML not installed — falling back to defaults. "
@@ -60,7 +64,8 @@ class CosmosAgent:
     ) -> CosmosInsight:
         """Analyse an incident via Cosmos Reason 2.
 
-        Returns a CosmosInsight with root-cause analysis.
+        Fetches recent tag history and passes it as context so R2 can see
+        trend data — not just a single snapshot.
         """
         logger.info(
             "Cosmos analysis requested for incident=%s node=%s",
@@ -68,21 +73,47 @@ class CosmosAgent:
             node_id,
         )
 
+        # Fetch tag history for trend context
+        history_seconds = self._config.get("tag_history", {}).get(
+            "default_window_seconds", 60
+        )
+        history = await self.fetch_tag_history(node_id, seconds=history_seconds)
+
+        context = ""
+        if history:
+            context = f"Tag history ({len(history)} snapshots, last {history_seconds}s):\n"
+            context += json.dumps(history, indent=2, default=str)
+
         return self.client.analyze_incident(
             incident_id=incident_id,
             node_id=node_id,
             tags=tags,
             video_url=video_url,
+            context=context,
         )
 
     async def fetch_tag_history(self, node_id: str, seconds: int = 60) -> dict:
-        """Return recent tag values for *node_id*.
+        """Return recent tag snapshots for *node_id* from the Matrix API.
 
-        Returns an empty dict until the Matrix Postgres API integration is
-        wired up.
+        Returns a dict keyed by timestamp, or empty dict on failure.
         """
-        # TODO: Fetch from Matrix Postgres API
-        return {}
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{self.matrix_url}/api/tags",
+                    params={"node_id": node_id, "seconds": seconds},
+                )
+                resp.raise_for_status()
+                rows = resp.json()
+                return {row["timestamp"]: row for row in rows}
+        except httpx.ConnectError:
+            logger.warning(
+                "Cannot reach Matrix API at %s for tag history", self.matrix_url
+            )
+            return {}
+        except Exception:
+            logger.exception("Failed to fetch tag history")
+            return {}
 
     def is_enabled(self) -> bool:
         """Return True when Cosmos integration is both configured and keyed."""
