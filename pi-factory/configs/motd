@@ -1,0 +1,17 @@
+
+  +=======================================================+
+  |                                                       |
+  |            P I   F A C T O R Y                        |
+  |            ========================                   |
+  |                                                       |
+  |   Industrial PLC Monitor + AI Diagnosis               |
+  |   Powered by FactoryLM                                |
+  |                                                       |
+  |   Dashboard:  http://pi-factory.local:8000            |
+  |   WiFi AP:    PiFactory-Connect                       |
+  |   Status:     pf-status                               |
+  |   Logs:       pf-logs                                 |
+  |   Info:       pf-info                                 |
+  |                                                       |
+  +=======================================================+
+

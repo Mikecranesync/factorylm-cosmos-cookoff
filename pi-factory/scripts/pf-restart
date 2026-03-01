@@ -1,0 +1,4 @@
+#!/bin/bash
+# Pi Factory — Restart service
+sudo systemctl restart pi-factory
+echo "Pi Factory restarted."

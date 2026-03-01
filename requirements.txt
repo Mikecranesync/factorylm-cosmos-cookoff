@@ -6,3 +6,8 @@ pymodbus
 anthropic
 Pillow
 openai
+qrcode
+pycomm3
+opcua
+python-multipart
+aiosqlite

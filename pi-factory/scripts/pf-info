@@ -1,0 +1,14 @@
+#!/bin/bash
+# Pi Factory — Show gateway info
+echo ""
+echo "  Pi Factory Status"
+echo "  ================="
+STATUS=$(systemctl is-active pi-factory 2>/dev/null || echo "unknown")
+GW_ID=$(jq -r '.gateway_id // "unknown"' /opt/factorylm/config.json 2>/dev/null || echo "unknown")
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+echo "  Service:    ${STATUS}"
+echo "  Gateway:    ${GW_ID}"
+echo "  IP:         ${IP}"
+echo "  Dashboard:  http://${IP}:8000"
+echo "  WiFi AP:    PiFactory-Connect"
+echo ""

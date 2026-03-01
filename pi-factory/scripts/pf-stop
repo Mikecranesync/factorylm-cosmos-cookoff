@@ -1,0 +1,4 @@
+#!/bin/bash
+# Pi Factory — Stop service
+sudo systemctl stop pi-factory
+echo "Pi Factory stopped."

@@ -1,0 +1,24 @@
+{
+  "brand": "Generic Modbus TCP",
+  "model": "Unknown",
+  "protocol": "modbus_tcp",
+  "default_port": 502,
+  "coils": {
+    "0": {"tag": "coil_0", "description": "Digital output 0"},
+    "1": {"tag": "coil_1", "description": "Digital output 1"},
+    "2": {"tag": "coil_2", "description": "Digital output 2"},
+    "3": {"tag": "coil_3", "description": "Digital output 3"},
+    "4": {"tag": "coil_4", "description": "Digital output 4"},
+    "5": {"tag": "coil_5", "description": "Digital output 5"},
+    "6": {"tag": "coil_6", "description": "Digital output 6"},
+    "7": {"tag": "coil_7", "description": "Digital output 7"}
+  },
+  "registers": {
+    "100": {"tag": "register_100", "scale": 1, "description": "Holding register 100"},
+    "101": {"tag": "register_101", "scale": 1, "description": "Holding register 101"},
+    "102": {"tag": "register_102", "scale": 1, "description": "Holding register 102"},
+    "103": {"tag": "register_103", "scale": 1, "description": "Holding register 103"},
+    "104": {"tag": "register_104", "scale": 1, "description": "Holding register 104"},
+    "105": {"tag": "register_105", "scale": 1, "description": "Holding register 105"}
+  }
+}

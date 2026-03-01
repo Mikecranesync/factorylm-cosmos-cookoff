@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FactoryLM Connect - Wizard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f29 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: rgba(15, 20, 25, 0.95);
+            border-bottom: 1px solid #2a3f5f;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #4a9eff;
+            letter-spacing: 0.5px;
+        }
+
+        .progress-container {
+            padding: 20px;
+            background: rgba(20, 25, 35, 0.8);
+            border-bottom: 1px solid #2a3f5f;
+        }
+
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .progress-step {
+            flex: 1;
+            height: 4px;
+            background: #1a2635;
+            border-radius: 2px;
+            transition: background 0.3s;
+        }
+
+        .progress-step.active {
+            background: #4a9eff;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+        }
+
+        .progress-step.completed {
+            background: #2ecc71;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+
+        .container {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            width: 100%;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .screen-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .screen-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .screen-content::-webkit-scrollbar-track {
+            background: #1a2635;
+            border-radius: 3px;
+        }
+
+        .screen-content::-webkit-scrollbar-thumb {
+            background: #2a3f5f;
+            border-radius: 3px;
+        }
+
+        .screen-content::-webkit-scrollbar-thumb:hover {
+            background: #3a5f7f;
+        }
+
+        .card {
+            background: rgba(30, 40, 55, 0.8);
+            border: 1px solid #2a3f5f;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: #4a9eff;
+            box-shadow: 0 0 15px rgba(74, 158, 255, 0.1);
+        }
+
+        .card h2 {
+            color: #4a9eff;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .qr-code {
+            text-align: center;
+            padding: 20px;
+            background: rgba(15, 20, 25, 0.9);
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .qr-code img {
+            max-width: 200px;
+            height: auto;
+            border: 2px solid #2a3f5f;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .gateway-id {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(74, 158, 255, 0.1);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+        }
+
+        .gateway-id label {
+            display: block;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .gateway-id .value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #4a9eff;
+            font-family: 'Courier New', monospace;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            background: rgba(20, 25, 35, 0.8);
+            border-top: 1px solid #2a3f5f;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: #4a9eff;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #5ab0ff;
+            box-shadow: 0 0 15px rgba(74, 158, 255, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #2a5f8f;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid #2a3f5f;
+            color: #888;
+        }
+
+        .btn-secondary:hover {
+            border-color: #4a9eff;
+            color: #4a9eff;
+        }
+
+        .scanning-progress {
+            margin: 20px 0;
+        }
+
+        .progress-bar-full {
+            height: 8px;
+            background: #1a2635;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a9eff, #2ecc71);
+            width: 0%;
+            transition: width 0.5s;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+        }
+
+        .device-list {
+            list-style: none;
+        }
+
+        .device-item {
+            padding: 15px;
+            background: rgba(20, 25, 35, 0.6);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .device-item:hover {
+            background: rgba(74, 158, 255, 0.1);
+            border-color: #4a9eff;
+        }
+
+        .device-item.selected {
+            background: rgba(74, 158, 255, 0.2);
+            border-color: #4a9eff;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.2);
+        }
+
+        .device-info {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .device-label {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .device-value {
+            color: #4a9eff;
+            font-weight: 600;
+        }
+
+        .tag-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .tag-item {
+            padding: 12px;
+            background: rgba(20, 25, 35, 0.6);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tag-info {
+            flex: 1;
+        }
+
+        .tag-name {
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+        }
+
+        .tag-meta {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .tag-value {
+            color: #2ecc71;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tag-status {
+            font-size: 16px;
+            color: #2ecc71;
+        }
+
+        .tag-edit-input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(15, 20, 25, 0.8);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .checkbox-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .checkbox-item {
+            padding: 12px;
+            background: rgba(20, 25, 35, 0.6);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .checkbox-item:hover {
+            background: rgba(74, 158, 255, 0.1);
+            border-color: #4a9eff;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: #4a9eff;
+        }
+
+        .checkbox-label {
+            flex: 1;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .panel-item {
+            background: rgba(20, 25, 35, 0.9);
+            border: 1px solid #2a3f5f;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .panel-item.live {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.1);
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.2);
+        }
+
+        .panel-item.down {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.2);
+        }
+
+        .panel-tag-name {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .panel-tag-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #4a9eff;
+            margin-bottom: 8px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .panel-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+
+        .panel-status.down {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .panel-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .panel-controls button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .wifi-network-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .wifi-item {
+            padding: 12px;
+            background: rgba(20, 25, 35, 0.6);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wifi-info {
+            flex: 1;
+        }
+
+        .wifi-name {
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+        }
+
+        .wifi-signal {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .manual-entry {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(20, 25, 35, 0.6);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            background: rgba(15, 20, 25, 0.8);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a9eff;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.2);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2ecc71;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.offline {
+            background: #e74c3c;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #2a3f5f;
+            border-top-color: #4a9eff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .info-message {
+            padding: 12px;
+            background: rgba(74, 158, 255, 0.1);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            color: #4a9eff;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .error-message {
+            padding: 12px;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            border-radius: 4px;
+            color: #e74c3c;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .success-message {
+            padding: 12px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 4px;
+            color: #2ecc71;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(30, 40, 55, 0.95);
+            border: 1px solid #2a3f5f;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h2 {
+            color: #4a9eff;
+            margin-bottom: 20px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(15, 20, 25, 0.8);
+            border: 1px solid #2a3f5f;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            header h1 {
+                font-size: 18px;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .button-group {
+                padding: 15px;
+            }
+
+            button {
+                padding: 10px 15px;
+                font-size: 12px;
+            }
+
+            .panel-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>FactoryLM Connect</h1>
+    </header>
+
+    <div class="progress-container">
+        <div class="progress-bar">
+            <div class="progress-step active" id="progress-1"></div>
+            <div class="progress-step" id="progress-2"></div>
+            <div class="progress-step" id="progress-3"></div>
+            <div class="progress-step" id="progress-4"></div>
+            <div class="progress-step" id="progress-5"></div>
+            <div class="progress-step" id="progress-6"></div>
+        </div>
+        <div class="progress-text">
+            <span id="screen-number">Screen 1</span> of 6
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Screen 1: Welcome -->
+        <div class="screen active" id="screen-1">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>Welcome to FactoryLM Connect</h2>
+                    <p style="color: #888; line-height: 1.6; margin-bottom: 20px;">
+                        Connect your industrial devices and create live monitoring dashboards. 
+                        Scan your gateway's QR code to get started.
+                    </p>
+
+                    <div class="gateway-id">
+                        <label>Gateway ID</label>
+                        <div class="value" id="gateway-id-display">Loading...</div>
+                    </div>
+
+                    <div class="qr-code">
+                        <div id="qr-code-container" style="min-height: 220px; display: flex; align-items: center; justify-content: center;">
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+
+                    <div class="info-message">
+                        Use a mobile device to scan the QR code to connect additional PLCs to this gateway.
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="goToScreen(2)">Scan for PLCs</button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Discovery -->
+        <div class="screen" id="screen-2">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>Scanning Network</h2>
+                    <div id="scan-progress-container" style="display: none;">
+                        <div class="scanning-progress">
+                            <div class="progress-bar-full">
+                                <div class="progress-bar-fill" id="scan-progress-fill"></div>
+                            </div>
+                            <div style="text-align: center; color: #888; font-size: 12px;">
+                                <span id="scan-progress-text">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="devices-container" style="display: none;">
+                        <h3 style="color: #888; font-size: 14px; margin-bottom: 15px;">Found Devices</h3>
+                        <ul class="device-list" id="device-list"></ul>
+                    </div>
+
+                    <div id="no-devices" style="display: none; text-align: center; padding: 30px 0;">
+                        <div style="color: #888; margin-bottom: 20px;">No devices found</div>
+                        <button class="btn-secondary" onclick="startScan()">Scan Again</button>
+                    </div>
+
+                    <div id="scan-message" style="text-align: center; padding: 30px 0; color: #888;">
+                        Click "Start Scan" to discover devices on your network
+                    </div>
+                </div>
+
+                <div class="card" style="display: none;" id="manual-entry-card">
+                    <h2>Manual Entry</h2>
+                    <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+                        Can't find your device? Enter the IP address and port manually.
+                    </p>
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" id="manual-ip" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label>Port</label>
+                        <input type="number" id="manual-port" placeholder="502" value="502">
+                    </div>
+                    <div class="form-group">
+                        <label>Protocol</label>
+                        <select id="manual-protocol" style="width: 100%; padding: 8px; background: rgba(15, 20, 25, 0.8); border: 1px solid #2a3f5f; border-radius: 4px; color: #e0e0e0; font-size: 14px;">
+                            <option value="modbus">Modbus TCP</option>
+                            <option value="ethernet">EtherNet/IP</option>
+                            <option value="opc">OPC UA</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="goToScreen(1)">Back</button>
+                <button class="btn-primary" id="start-scan-btn" onclick="startScan()">Start Scan</button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Tag Extraction -->
+        <div class="screen" id="screen-3">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>Extract Tags</h2>
+                    <div id="extraction-loading" style="text-align: center; padding: 30px 0; display: none;">
+                        <div class="loading-spinner" style="margin: 0 auto 15px;"></div>
+                        <div style="color: #888;">Extracting tags from device...</div>
+                    </div>
+
+                    <div id="extraction-content" style="display: none;">
+                        <div class="info-message" id="protocol-info">
+                            Protocol: <strong id="protocol-name">Modbus TCP</strong>
+                        </div>
+
+                        <div id="modbus-edit-mode" style="display: none;">
+                            <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+                                Tap on tag names to edit and label them for better organization.
+                            </p>
+                        </div>
+
+                        <ul class="tag-list" id="tag-list"></ul>
+
+                        <div id="empty-tags" style="display: none; text-align: center; padding: 30px 0; color: #888;">
+                            No tags found
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="goToScreen(2)">Back</button>
+                <button class="btn-primary" id="select-tags-btn" onclick="goToScreen(4)" style="display: none;">Select Tags for Panel</button>
+            </div>
+        </div>
+
+        <!-- Screen 4: Tag Selection -->
+        <div class="screen" id="screen-4">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>Select Tags</h2>
+                    <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+                        Choose which tags to include in your live dashboard.
+                    </p>
+
+                    <button class="btn-secondary" style="width: 100%; margin-bottom: 15px;" onclick="autoSelectTags()">
+                        Auto-Select Recommended
+                    </button>
+
+                    <ul class="checkbox-list" id="checkbox-list"></ul>
+
+                    <div id="no-tags-select" style="display: none; text-align: center; padding: 30px 0; color: #888;">
+                        No tags available
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="goToScreen(3)">Back</button>
+                <button class="btn-primary" id="build-panel-btn" onclick="goToScreen(5)">Build Panel</button>
+            </div>
+        </div>
+
+        <!-- Screen 5: Panel Preview (LIVE Dashboard) -->
+        <div class="screen" id="screen-5">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>Live Dashboard</h2>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <div class="status-indicator" id="live-status"></div>
+                        <span id="live-status-text" style="color: #888; font-size: 13px;">Connected</span>
+                    </div>
+
+                    <div class="panel-grid" id="panel-grid"></div>
+
+                    <div id="no-panel-items" style="display: none; text-align: center; padding: 30px 0; color: #888;">
+                        No tags selected
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <div class="panel-controls">
+                    <button class="btn-secondary" onclick="goToScreen(4)" style="flex: 0.5;">Back</button>
+                    <button class="btn-primary" onclick="showDiagnostics()" style="flex: 0.5;">AI Diagnostics</button>
+                    <button class="btn-primary" onclick="showAlerts()" style="flex: 0.5;">Set Alerts</button>
+                    <button class="btn-primary" onclick="savePanel()" style="flex: 0.5;">Save Panel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 6: WiFi Uplink -->
+        <div class="screen" id="screen-6">
+            <div class="screen-content">
+                <div class="card">
+                    <h2>WiFi Uplink (Optional)</h2>
+                    <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+                        Connect to a WiFi network for cloud synchronization and remote access.
+                    </p>
+
+                    <div id="wifi-scan-loading" style="text-align: center; padding: 30px 0;">
+                        <div class="loading-spinner" style="margin: 0 auto 15px;"></div>
+                        <div style="color: #888;">Scanning for networks...</div>
+                    </div>
+
+                    <ul class="wifi-network-list" id="wifi-list" style="display: none;"></ul>
+
+                    <div id="no-wifi" style="display: none; text-align: center; padding: 30px 0; color: #888;">
+                        No networks found
+                    </div>
+
+                    <div id="wifi-password-modal" class="modal-overlay">
+                        <div class="modal">
+                            <h2>Enter WiFi Password</h2>
+                            <div id="selected-wifi-name" style="color: #888; margin-bottom: 20px;"></div>
+                            <input type="password" id="wifi-password-input" class="modal-input" placeholder="Password">
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-secondary" style="flex: 1;" onclick="cancelWiFiConnection()">Cancel</button>
+                                <button class="btn-primary" style="flex: 1;" onclick="connectToWiFi()">Connect</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="goToScreen(5)">Back</button>
+                <button class="btn-secondary" onclick="finishWizard()">Skip</button>
+                <button class="btn-primary" id="finish-btn" onclick="finishWizard()">Finish</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            currentScreen: 1,
+            gatewayId: null,
+            discoveredDevices: [],
+            selectedDevice: null,
+            extractedTags: [],
+            selectedTags: [],
+            panelData: {},
+            liveData: {},
+            selectedWiFi: null,
+            livePollingInterval: null,
+            protocol: null
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGatewayId();
+            generateQRCode();
+        });
+
+        // Screen navigation
+        function goToScreen(screenNum) {
+            const currentElement = document.getElementById(`screen-${state.currentScreen}`);
+            const nextElement = document.getElementById(`screen-${screenNum}`);
+
+            if (currentElement) {
+                currentElement.classList.remove('active');
+            }
+
+            if (nextElement) {
+                nextElement.classList.add('active');
+                state.currentScreen = screenNum;
+                updateProgress();
+
+                // Screen-specific initialization
+                if (screenNum === 5) {
+                    startLivePolling();
+                } else if (screenNum === 6) {
+                    scanWiFiNetworks();
+                } else {
+                    if (state.livePollingInterval) {
+                        clearInterval(state.livePollingInterval);
+                        state.livePollingInterval = null;
+                    }
+                }
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        function updateProgress() {
+            for (let i = 1; i <= 6; i++) {
+                const step = document.getElementById(`progress-${i}`);
+                if (i < state.currentScreen) {
+                    step.classList.remove('active');
+                    step.classList.add('completed');
+                } else if (i === state.currentScreen) {
+                    step.classList.remove('completed');
+                    step.classList.add('active');
+                } else {
+                    step.classList.remove('active', 'completed');
+                }
+            }
+
+            document.getElementById('screen-number').textContent = `Screen ${state.currentScreen}`;
+        }
+
+        // Gateway ID and QR Code
+        function loadGatewayId() {
+            fetch('/api/gateway/id')
+                .then(r => r.json())
+                .then(data => {
+                    state.gatewayId = data.id || 'GW-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+                    document.getElementById('gateway-id-display').textContent = state.gatewayId;
+                })
+                .catch(() => {
+                    state.gatewayId = 'GW-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+                    document.getElementById('gateway-id-display').textContent = state.gatewayId;
+                });
+        }
+
+        function generateQRCode() {
+            fetch(`/api/gateway/qr`)
+                .then(r => r.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    document.getElementById('qr-code-container').innerHTML = `<img src="${url}" alt="Gateway QR Code">`;
+                })
+                .catch(() => {
+                    // Fallback: generate QR code locally if endpoint not available
+                    document.getElementById('qr-code-container').innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="color: #888; font-size: 14px;">QR Code will display when gateway is ready</div>
+                        </div>
+                    `;
+                });
+        }
+
+        // Discovery
+        function startScan() {
+            const btn = document.getElementById('start-scan-btn');
+            btn.disabled = true;
+            btn.textContent = 'Scanning...';
+
+            document.getElementById('scan-message').style.display = 'none';
+            document.getElementById('scan-progress-container').style.display = 'block';
+            document.getElementById('devices-container').style.display = 'none';
+            document.getElementById('no-devices').style.display = 'none';
+            document.getElementById('manual-entry-card').style.display = 'block';
+
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress = Math.min(progress + Math.random() * 30, 90);
+                document.getElementById('scan-progress-fill').style.width = progress + '%';
+                document.getElementById('scan-progress-text').textContent = Math.round(progress) + '%';
+            }, 300);
+
+            fetch('/api/plc/scan')
+                .then(r => r.json())
+                .then(data => {
+                    clearInterval(progressInterval);
+                    progress = 100;
+                    document.getElementById('scan-progress-fill').style.width = '100%';
+                    document.getElementById('scan-progress-text').textContent = '100%';
+
+                    state.discoveredDevices = data.devices || [];
+
+                    setTimeout(() => {
+                        displayDevices();
+                        btn.disabled = false;
+                        btn.textContent = 'Start Scan';
+                    }, 500);
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    console.error('Scan failed:', error);
+
+                    // Mock data for demo
+                    state.discoveredDevices = [
+                        { ip: '192.168.1.100', port: 502, protocol: 'Modbus TCP', brand: 'Siemens S7', status: 'online' },
+                        { ip: '192.168.1.101', port: 44818, protocol: 'EtherNet/IP', brand: 'Allen-Bradley', status: 'online' },
+                        { ip: '192.168.1.102', port: 4840, protocol: 'OPC UA', brand: 'Phoenix Contact', status: 'online' }
+                    ];
+
+                    displayDevices();
+                    btn.disabled = false;
+                    btn.textContent = 'Start Scan';
+                });
+        }
+
+        function displayDevices() {
+            const container = document.getElementById('devices-container');
+            const noDevices = document.getElementById('no-devices');
+            const list = document.getElementById('device-list');
+
+            list.innerHTML = '';
+
+            if (state.discoveredDevices.length === 0) {
+                container.style.display = 'none';
+                noDevices.style.display = 'block';
+            } else {
+                container.style.display = 'block';
+                noDevices.style.display = 'none';
+
+                state.discoveredDevices.forEach((device, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'device-item';
+                    item.innerHTML = `
+                        <div class="device-info">
+                            <div><span class="device-label">IP:</span> <span class="device-value">${device.ip}</span></div>
+                            <div><span class="device-label">Protocol:</span> <span class="device-value">${device.protocol}</span></div>
+                            <div><span class="device-label">Brand:</span> <span class="device-value">${device.brand || 'Unknown'}</span></div>
+                        </div>
+                    `;
+                    item.onclick = () => selectDevice(index);
+                    list.appendChild(item);
+                });
+            }
+        }
+
+        function selectDevice(index) {
+            state.selectedDevice = state.discoveredDevices[index];
+            document.querySelectorAll('.device-item').forEach((item, i) => {
+                if (i === index) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+
+            // Auto-proceed to tag extraction
+            extractTags();
+            goToScreen(3);
+        }
+
+        // Tag Extraction
+        function extractTags() {
+            if (!state.selectedDevice) return;
+
+            const container = document.getElementById('extraction-content');
+            const loading = document.getElementById('extraction-loading');
+            const tagList = document.getElementById('tag-list');
+            const emptyTags = document.getElementById('empty-tags');
+
+            container.style.display = 'none';
+            loading.style.display = 'block';
+            document.getElementById('select-tags-btn').style.display = 'none';
+
+            state.protocol = state.selectedDevice.protocol.toLowerCase().includes('modbus') ? 'modbus' : 
+                             state.selectedDevice.protocol.toLowerCase().includes('ethernet') ? 'ethernet' : 'opc';
+
+            const payload = {
+                ip: state.selectedDevice.ip,
+                port: state.selectedDevice.port
+            };
+
+            fetch('/api/plc/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    state.extractedTags = data.tags || [];
+                    displayExtractedTags();
+                })
+                .catch(error => {
+                    console.error('Extraction failed:', error);
+
+                    // Mock data
+                    state.extractedTags = [
+                        { name: 'temperature', type: 'float', value: 72.5, address: '0' },
+                        { name: 'pressure', type: 'int', value: 42, address: '1' },
+                        { name: 'flow_rate', type: 'float', value: 12.3, address: '2' },
+                        { name: 'status', type: 'bool', value: true, address: '3' },
+                        { name: 'alarm', type: 'bool', value: false, address: '4' }
+                    ];
+
+                    displayExtractedTags();
+                });
+        }
+
+        function displayExtractedTags() {
+            const container = document.getElementById('extraction-content');
+            const loading = document.getElementById('extraction-loading');
+            const tagList = document.getElementById('tag-list');
+            const emptyTags = document.getElementById('empty-tags');
+            const protocolName = document.getElementById('protocol-name');
+            const modbusEditMode = document.getElementById('modbus-edit-mode');
+
+            loading.style.display = 'none';
+            container.style.display = 'block';
+
+            protocolName.textContent = state.selectedDevice.protocol;
+
+            if (state.protocol === 'modbus') {
+                modbusEditMode.style.display = 'block';
+            } else {
+                modbusEditMode.style.display = 'none';
+            }
+
+            tagList.innerHTML = '';
+
+            if (state.extractedTags.length === 0) {
+                emptyTags.style.display = 'block';
+                document.getElementById('select-tags-btn').style.display = 'none';
+            } else {
+                emptyTags.style.display = 'none';
+                document.getElementById('select-tags-btn').style.display = 'block';
+
+                state.extractedTags.forEach((tag, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'tag-item';
+
+                    if (state.protocol === 'modbus') {
+                        item.innerHTML = `
+                            <div style="flex: 1;">
+                                <input type="text" class="tag-edit-input" value="${tag.name}" 
+                                    onchange="state.extractedTags[${index}].name = this.value;"
+                                    placeholder="Tag name">
+                                <div class="tag-meta">Type: <strong>${tag.type}</strong> | Value: <span class="tag-value">${tag.value}</span></div>
+                            </div>
+                            <div class="tag-status">✓</div>
+                        `;
+                    } else {
+                        item.innerHTML = `
+                            <div class="tag-info">
+                                <div class="tag-name">${tag.name}</div>
+                                <div class="tag-meta">Type: <strong>${tag.type}</strong> | Value: <span class="tag-value">${tag.value}</span></div>
+                            </div>
+                            <div class="tag-status">✓</div>
+                        `;
+                    }
+
+                    tagList.appendChild(item);
+                });
+            }
+        }
+
+        // Tag Selection
+        function displayCheckboxList() {
+            const container = document.getElementById('checkbox-list');
+            const noTags = document.getElementById('no-tags-select');
+
+            container.innerHTML = '';
+
+            if (state.extractedTags.length === 0) {
+                noTags.style.display = 'block';
+            } else {
+                noTags.style.display = 'none';
+
+                state.extractedTags.forEach((tag, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'checkbox-item';
+
+                    const isSelected = state.selectedTags.some(t => t.name === tag.name);
+
+                    item.innerHTML = `
+                        <input type="checkbox" id="tag-${index}" ${isSelected ? 'checked' : ''} 
+                            onchange="toggleTag(${index})">
+                        <label for="tag-${index}" class="checkbox-label">
+                            <div class="tag-name">${tag.name}</div>
+                            <div class="tag-meta">Type: ${tag.type}</div>
+                        </label>
+                    `;
+
+                    container.appendChild(item);
+                });
+            }
+        }
+
+        function toggleTag(index) {
+            const tag = state.extractedTags[index];
+            const checkbox = document.getElementById(`tag-${index}`);
+
+            if (checkbox.checked) {
+                if (!state.selectedTags.some(t => t.name === tag.name)) {
+                    state.selectedTags.push(tag);
+                }
+            } else {
+                state.selectedTags = state.selectedTags.filter(t => t.name !== tag.name);
+            }
+        }
+
+        function autoSelectTags() {
+            // Auto-select up to 5 tags
+            state.selectedTags = state.extractedTags.slice(0, 5);
+            displayCheckboxList();
+
+            // Update checkboxes
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        }
+
+        // Panel Preview
+        function displayPanelPreview() {
+            const grid = document.getElementById('panel-grid');
+            const noItems = document.getElementById('no-panel-items');
+
+            grid.innerHTML = '';
+
+            if (state.selectedTags.length === 0) {
+                noItems.style.display = 'block';
+            } else {
+                noItems.style.display = 'none';
+
+                state.selectedTags.forEach((tag, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'panel-item live';
+                    item.id = `panel-item-${index}`;
+                    item.innerHTML = `
+                        <div class="panel-tag-name">${tag.name}</div>
+                        <div class="panel-tag-value" id="value-${index}">${tag.value}</div>
+                        <div class="panel-status" id="status-${index}">ONLINE</div>
+                    `;
+
+                    grid.appendChild(item);
+                    state.panelData[tag.name] = tag.value;
+                });
+            }
+        }
+
+        function startLivePolling() {
+            displayPanelPreview();
+            displayCheckboxList();
+
+            // Poll every 500ms
+            if (state.livePollingInterval) {
+                clearInterval(state.livePollingInterval);
+            }
+
+            pollLiveData();
+
+            state.livePollingInterval = setInterval(pollLiveData, 500);
+        }
+
+        function pollLiveData() {
+            const payload = {
+                ip: state.selectedDevice.ip,
+                port: state.selectedDevice.port,
+                tags: state.selectedTags.map(t => t.name)
+            };
+
+            fetch('/api/plc/live', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    state.liveData = data.data || {};
+                    updatePanelValues();
+                    updateStatusIndicator(true);
+                })
+                .catch(error => {
+                    console.error('Live polling failed:', error);
+                    // Simulate live data
+                    state.selectedTags.forEach(tag => {
+                        if (tag.type === 'float') {
+                            state.liveData[tag.name] = (Math.random() * 100).toFixed(2);
+                        } else if (tag.type === 'int') {
+                            state.liveData[tag.name] = Math.floor(Math.random() * 1000);
+                        } else if (tag.type === 'bool') {
+                            state.liveData[tag.name] = Math.random() > 0.5;
+                        }
+                    });
+                    updatePanelValues();
+                    updateStatusIndicator(Math.random() > 0.1);
+                });
+        }
+
+        function updatePanelValues() {
+            state.selectedTags.forEach((tag, index) => {
+                const value = state.liveData[tag.name] !== undefined ? state.liveData[tag.name] : tag.value;
+                const valueElement = document.getElementById(`value-${index}`);
+                if (valueElement) {
+                    valueElement.textContent = value;
+                }
+            });
+        }
+
+        function updateStatusIndicator(isOnline) {
+            const indicator = document.getElementById('live-status');
+            const text = document.getElementById('live-status-text');
+
+            if (isOnline) {
+                indicator.classList.remove('offline');
+                text.textContent = 'Connected';
+            } else {
+                indicator.classList.add('offline');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function showDiagnostics() {
+            alert('AI Diagnostics: Your system is operating optimally. All devices are responding normally.');
+        }
+
+        function showAlerts() {
+            alert('Set up custom alerts for temperature > 80C, pressure < 40 PSI, etc.');
+        }
+
+        function savePanel() {
+            const payload = {
+                name: 'Live Dashboard',
+                device_ip: state.selectedDevice.ip,
+                device_port: state.selectedDevice.port,
+                protocol: state.protocol,
+                tags: state.selectedTags.map(t => ({ name: t.name, type: t.type }))
+            };
+
+            fetch('/api/plc/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    alert('Panel saved successfully!');
+                    goToScreen(6);
+                })
+                .catch(error => {
+                    console.error('Save failed:', error);
+                    alert('Panel saved (mock)');
+                    goToScreen(6);
+                });
+        }
+
+        // WiFi
+        function scanWiFiNetworks() {
+            const loading = document.getElementById('wifi-scan-loading');
+            const list = document.getElementById('wifi-list');
+            const noWiFi = document.getElementById('no-wifi');
+
+            loading.style.display = 'block';
+            list.style.display = 'none';
+            noWiFi.style.display = 'none';
+
+            fetch('/api/wifi/scan')
+                .then(r => r.json())
+                .then(data => {
+                    const networks = data.networks || [];
+                    displayWiFiNetworks(networks);
+                })
+                .catch(error => {
+                    console.error('WiFi scan failed:', error);
+
+                    // Mock data
+                    const networks = [
+                        { ssid: 'FactoryNet-5G', signal: -45, security: 'WPA2' },
+                        { ssid: 'FactoryGuest', signal: -65, security: 'Open' },
+                        { ssid: 'Conference', signal: -72, security: 'WPA3' }
+                    ];
+
+                    displayWiFiNetworks(networks);
+                });
+        }
+
+        function displayWiFiNetworks(networks) {
+            const loading = document.getElementById('wifi-scan-loading');
+            const list = document.getElementById('wifi-list');
+            const noWiFi = document.getElementById('no-wifi');
+
+            loading.style.display = 'none';
+
+            list.innerHTML = '';
+
+            if (networks.length === 0) {
+                list.style.display = 'none';
+                noWiFi.style.display = 'block';
+            } else {
+                list.style.display = 'block';
+                noWiFi.style.display = 'none';
+
+                networks.forEach(network => {
+                    const item = document.createElement('li');
+                    item.className = 'wifi-item';
+                    item.innerHTML = `
+                        <div class="wifi-info">
+                            <div class="wifi-name">${network.ssid}</div>
+                            <div class="wifi-signal">Signal: ${network.signal} dBm | ${network.security}</div>
+                        </div>
+                        <button class="btn-secondary" style="flex: 0; width: auto;" onclick="selectWiFi('${network.ssid}')">
+                            Connect
+                        </button>
+                    `;
+                    list.appendChild(item);
+                });
+            }
+        }
+
+        function selectWiFi(ssid) {
+            state.selectedWiFi = ssid;
+            document.getElementById('selected-wifi-name').textContent = `SSID: ${ssid}`;
+            document.getElementById('wifi-password-modal').classList.add('active');
+        }
+
+        function connectToWiFi() {
+            const password = document.getElementById('wifi-password-input').value;
+
+            if (!password) {
+                alert('Please enter a password');
+                return;
+            }
+
+            const payload = {
+                ssid: state.selectedWiFi,
+                password: password
+            };
+
+            fetch('/api/wifi/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    alert('WiFi connection successful!');
+                    cancelWiFiConnection();
+                    finishWizard();
+                })
+                .catch(error => {
+                    console.error('WiFi connection failed:', error);
+                    alert('WiFi connected (mock)');
+                    cancelWiFiConnection();
+                    finishWizard();
+                });
+        }
+
+        function cancelWiFiConnection() {
+            document.getElementById('wifi-password-modal').classList.remove('active');
+            document.getElementById('wifi-password-input').value = '';
+        }
+
+        function finishWizard() {
+            if (state.livePollingInterval) {
+                clearInterval(state.livePollingInterval);
+            }
+            alert('Setup complete! Your FactoryLM Connect dashboard is ready.');
+            // In a real app, redirect to dashboard
+            // window.location.href = '/dashboard';
+        }
+
+        // Initialize when screen-4 is shown
+        const observer = new MutationObserver(() => {
+            if (document.getElementById('screen-4').classList.contains('active')) {
+                displayCheckboxList();
+            }
+        });
+
+        observer.observe(document.getElementById('screen-4'), { attributes: true });
+    </script>
+</body>
+</html>

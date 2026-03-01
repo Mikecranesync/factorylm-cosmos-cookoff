@@ -1,0 +1,3 @@
+#!/bin/bash
+# Pi Factory — Show service status
+systemctl status pi-factory

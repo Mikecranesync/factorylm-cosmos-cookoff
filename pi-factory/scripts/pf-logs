@@ -1,0 +1,3 @@
+#!/bin/bash
+# Pi Factory — Tail live logs
+journalctl -u pi-factory -f --no-pager "$@"

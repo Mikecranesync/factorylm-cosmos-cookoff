@@ -1,0 +1,4 @@
+#!/bin/bash
+# Pi Factory — Start service
+sudo systemctl start pi-factory
+echo "Pi Factory started."

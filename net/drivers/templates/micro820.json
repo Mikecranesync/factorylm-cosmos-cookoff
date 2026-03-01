@@ -1,0 +1,20 @@
+{
+  "brand": "Allen-Bradley Micro 820",
+  "model": "2080-LC30-48QWB",
+  "protocol": "modbus_tcp",
+  "default_port": 502,
+  "coils": {
+    "0": {"tag": "Conveyor", "description": "Belt motor command"},
+    "1": {"tag": "Emitter", "description": "Item spawner"},
+    "2": {"tag": "SensorStart", "description": "Entry photoeye"},
+    "3": {"tag": "SensorEnd", "description": "Exit photoeye"}
+  },
+  "registers": {
+    "100": {"tag": "item_count", "scale": 1, "description": "Items reached SensorEnd"},
+    "101": {"tag": "motor_speed", "scale": 1, "description": "Speed 0-100%"},
+    "102": {"tag": "motor_current", "scale": 0.1, "description": "Motor current (Amps)"},
+    "103": {"tag": "temperature", "scale": 0.1, "description": "Temperature (C)"},
+    "104": {"tag": "pressure", "scale": 1, "description": "Pressure (PSI)"},
+    "105": {"tag": "error_code", "scale": 1, "description": "0=OK 1=Overload 2=Overheat 3=Jam 4=Sensor 5=Comms"}
+  }
+}

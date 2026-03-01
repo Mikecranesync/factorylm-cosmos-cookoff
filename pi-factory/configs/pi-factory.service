@@ -1,0 +1,22 @@
+[Unit]
+Description=Pi Factory — FactoryLM Connect Gateway
+Documentation=https://github.com/Mikecranesync/factorylm-cosmos-cookoff
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/factorylm
+Environment="PATH=/opt/factorylm/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="FACTORYLM_NET_MODE=real"
+Environment="FACTORYLM_NET_DB=/opt/factorylm/data/net.db"
+ExecStart=/opt/factorylm/venv/bin/uvicorn net.api.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pi-factory
+
+[Install]
+WantedBy=multi-user.target
