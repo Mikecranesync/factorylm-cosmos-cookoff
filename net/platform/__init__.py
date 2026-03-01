@@ -13,26 +13,30 @@ def get_wifi_scanner():
     Get the appropriate WiFi scanner for the current platform.
 
     Returns:
-        LinuxWifiScanner on Linux with real WiFi hardware
-        MockWifiScanner on other platforms or in sim mode
+        LinuxWifiScanner on Linux (Pi)
+        MacOSWifiScanner on macOS (CHARLIE, ALPHA)
+        MockWifiScanner as fallback
     """
-    import os
-    mode = os.environ.get("FACTORYLM_NET_MODE", "real")
+    system = platform.system()
 
-    if mode == "sim":
-        from .mock import MockWifiScanner
-        return MockWifiScanner()
-
-    if platform.system() == "Linux":
+    if system == "Linux":
         try:
             from .linux import LinuxWifiScanner
             return LinuxWifiScanner()
         except Exception:
-            from .mock import MockWifiScanner
-            return MockWifiScanner()
-    else:
-        from .mock import MockWifiScanner
-        return MockWifiScanner()
+            pass
+
+    if system == "Darwin":
+        try:
+            from .macos import MacOSWifiScanner
+            scanner = MacOSWifiScanner()
+            if scanner._available:
+                return scanner
+        except Exception:
+            pass
+
+    from .mock import MockWifiScanner
+    return MockWifiScanner()
 
 
 __all__ = ['get_wifi_scanner']
