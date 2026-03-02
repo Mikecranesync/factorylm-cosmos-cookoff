@@ -1,7 +1,11 @@
 """
 Allen-Bradley Micro 820 PLC client implementation.
 
-Provides generic Micro 820 support with configurable register mapping.
+DEPRECATED: This module has broken imports (modbus_client.py, models.py don't exist).
+The rest of the codebase uses pymodbus directly — see:
+  - cookoff/diagnosis_engine.py (read_live_plc)
+  - sim/factoryio_bridge.py (ModbusTcpClient)
+This file is kept for reference only.
 """
 
 from datetime import datetime

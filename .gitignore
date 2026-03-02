@@ -40,3 +40,6 @@ coverage/
 
 # Claude local settings
 .claude/
+
+# Serena AI agent cache
+.serena/

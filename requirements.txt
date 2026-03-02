@@ -3,7 +3,8 @@ uvicorn
 httpx
 pyyaml
 pymodbus
-anthropic
+mss
+requests
 Pillow
 openai
 qrcode
