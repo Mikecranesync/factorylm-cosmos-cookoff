@@ -1,0 +1,9 @@
+IMG_NAME=Pi-Factory
+RELEASE=bookworm
+DEPLOY_COMPRESSION=gz
+LOCALE_DEFAULT=en_US.UTF-8
+TARGET_HOSTNAME=pi-factory
+FIRST_USER_NAME=pi
+FIRST_USER_PASS=factorylm
+ENABLE_SSH=1
+STAGE_LIST="stage0 stage1 stage2 stage-factorylm"
