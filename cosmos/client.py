@@ -4,6 +4,7 @@ Cosmos Reason 2 API client — NVIDIA Cosmos Cookoff 2026.
 Loads settings from config/cosmos.yaml and exposes analyze_incident().
 Uses real NVIDIA API when NVIDIA_COSMOS_API_KEY is set, otherwise falls back to stub.
 """
+from __future__ import annotations
 
 import datetime
 import json

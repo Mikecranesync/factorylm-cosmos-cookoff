@@ -1,0 +1,18 @@
+[Unit]
+Description=Pi Factory First Boot Setup
+Before=pi-factory.service
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/opt/factorylm/.firstboot-done
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/factorylm/first_boot.sh
+ExecStartPost=/bin/touch /opt/factorylm/.firstboot-done
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

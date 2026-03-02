@@ -13,6 +13,7 @@ Usage:
     python sim/factoryio_bridge.py --interval 200      # 200ms polling (5 Hz)
     python sim/factoryio_bridge.py --plc-host 192.168.1.100
 """
+from __future__ import annotations
 
 import argparse
 import datetime

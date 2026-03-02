@@ -8,6 +8,7 @@ Usage:
     python video/ingester.py
     python video/ingester.py --input recordings/raw --chunk-duration 15
 """
+from __future__ import annotations
 
 import argparse
 import datetime

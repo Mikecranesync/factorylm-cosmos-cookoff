@@ -8,6 +8,7 @@ Usage:
     python video/short_builder.py --clips 1,5,12 --output demo.mp4 --title "Jam Diagnosis Demo"
     python video/short_builder.py --auto --top 5 --output best_of.mp4
 """
+from __future__ import annotations
 
 import argparse
 import json

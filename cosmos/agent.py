@@ -7,6 +7,7 @@ analysis and video-grounded reasoning.
 
 Read-only — CosmosAgent never writes to PLCs.
 """
+from __future__ import annotations
 
 import asyncio
 import datetime

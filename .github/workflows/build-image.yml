@@ -1,0 +1,123 @@
+name: Build Pi Factory Image
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: 'Image name override'
+        default: 'PiFactory'
+        required: false
+
+jobs:
+  # Run tests first — don't build an image if tests fail
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "image_name=PiFactory-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            echo "image_name=PiFactory-dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stamp version into config
+        run: |
+          cat > pi-factory/version.json << EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "commit": "${{ github.sha }}",
+            "built_at": "$(date -Iseconds)",
+            "branch": "${{ github.ref_name }}"
+          }
+          EOF
+
+      - name: Build Pi image via pi-gen
+        uses: usimd/pi-gen-action@v1
+        with:
+          image-name: ${{ steps.version.outputs.image_name }}
+          stage-list: stage0 stage1 stage2 ./factorylm-image/pi-gen/stage-factorylm
+          compression: xz
+          hostname: pi-factory
+          username: pi
+          password: factorylm
+          enable-ssh: 1
+          locale: en_US.UTF-8
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-factory-image-${{ steps.version.outputs.version }}
+          path: deploy/*.img.xz
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: deploy/*.img.xz
+          generate_release_notes: true
+          body: |
+            ## Pi Factory ${{ github.ref_name }}
+
+            **Flash → Boot → Connect → Monitor.** That's it.
+
+            ### Install
+
+            **Option A — Pre-built image (fastest):**
+            1. Download `PiFactory-${{ github.ref_name }}.img.xz` below
+            2. Flash to microSD with [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+            3. Boot Pi → connect phone to `PiFactory-Connect` WiFi
+            4. Wizard auto-launches at `http://192.168.4.1:8000/setup`
+
+            **Option B — Install on existing Pi OS:**
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd factorylm-cosmos-cookoff
+            sudo bash pi-factory/setup.sh
+            ```
+
+            ### Compatible Hardware
+            Raspberry Pi 3B+, Pi 4 (all RAM), Pi 5, Pi Zero 2W
+
+            ### What's New
+            See commit history above for full changelog.
+
+      - name: Update releases/latest.json
+        if: github.ref_type == 'tag'
+        run: |
+          cat > releases/latest.json << EOF
+          {
+            "os_list": [{
+              "name": "Pi Factory",
+              "description": "Industrial PLC monitor + AI diagnosis. Plug in and go.",
+              "icon": "https://raw.githubusercontent.com/${{ github.repository }}/main/pi-factory/icon.png",
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PiFactory-${{ github.ref_name }}.img.xz",
+              "extract_size": 2000000000,
+              "image_download_size": 600000000,
+              "release_date": "$(date +%Y-%m-%d)",
+              "supported_models": ["pi3", "pi4", "pi5", "pi02"]
+            }]
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add releases/latest.json
+          git commit -m "Update releases/latest.json for ${{ github.ref_name }}" || true
+          git push origin HEAD:main || true

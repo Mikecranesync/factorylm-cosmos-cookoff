@@ -20,6 +20,7 @@ Fault injection (interactive):
         estop        — Emergency stop
         release      — Release e-stop
 """
+from __future__ import annotations
 
 import argparse
 import asyncio

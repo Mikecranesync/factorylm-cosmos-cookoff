@@ -1,0 +1,8 @@
+{
+  "gateway_id": "flm-dev-local",
+  "version": "1.0.0",
+  "mode": "sim",
+  "api_port": 8000,
+  "plc_poll_hz": 5,
+  "history_write_hz": 1
+}

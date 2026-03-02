@@ -6,6 +6,7 @@ Usage:
     python video/highlight_selector.py --date 2026-02-13 --event jam --top 10
     python video/highlight_selector.py --min-score 80
 """
+from __future__ import annotations
 
 import argparse
 import json

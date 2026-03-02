@@ -1,0 +1,12 @@
+{
+  "os_list": [{
+    "name": "FactoryLM Connect",
+    "description": "Industrial PLC monitoring gateway. No RSLinx. No CCW. Just plug in.",
+    "icon": "https://factorylm.com/img/connect-icon.png",
+    "url": "https://github.com/mikecranesync/factorylm-connect/releases/latest/download/FactoryLM-Connect.img.gz",
+    "extract_size": 2000000000,
+    "image_download_size": 800000000,
+    "release_date": "2026-03-01",
+    "supported_models": ["pi3", "pi4", "pi5", "pi02"]
+  }]
+}
