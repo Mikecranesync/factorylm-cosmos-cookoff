@@ -1,127 +1,120 @@
-# FactoryLM Vision: Multimodal AI Diagnostics for Industrial Automation
+# Pi Factory — Industrial PLC Monitor + AI Diagnosis
 
-> Fuse live video + PLC telemetry through NVIDIA Cosmos Reason2-8B to diagnose factory faults in seconds — not hours.
+> Plug a Raspberry Pi into any Modbus PLC. Get a live dashboard, fault detection, and AI-powered diagnosis in under 5 minutes.
 
-**NVIDIA Cosmos Cookoff Submission** | [Whitepaper](cookoff/WHITEPAPER.md) | [User Manual](cookoff/USER_MANUAL.md) | [Architecture](docs/cosmos_architecture.md)
-
----
-
-## Demo Video
-
-<!-- TODO: Replace with final recording before March 5 -->
-[![Demo Video](https://img.shields.io/badge/Demo-Coming%20Soon-blue)](https://github.com/Mikecranesync/factorylm-cosmos-cookoff)
+**Flash → Boot → Connect → Monitor.** That's it.
 
 ---
 
-## The Problem
+## What It Does
 
-Factory technicians spend **40% of their time diagnosing equipment faults** — walking to machines, reading HMI screens, cross-referencing error codes against manuals. PLCs record motor current, temperature, and conveyor speed at 10 Hz. Cameras watch production lines 24/7. Yet when something goes wrong, no system connects what the instruments report with what the cameras see.
+Pi Factory turns a Raspberry Pi into a plug-and-play industrial gateway. It auto-discovers PLCs on the local network, reads tags over Modbus TCP at 5 Hz, detects 8 fault conditions in real time, and serves a browser-based dashboard over WiFi. No cloud account required — everything runs on the Pi.
 
-**The data exists. The inference doesn't.**
+For advanced diagnosis, Pi Factory can fuse live video with PLC telemetry through NVIDIA Cosmos Reason2-8B to diagnose faults that neither camera nor instruments alone can catch.
 
 ---
 
-## What FactoryLM Vision Does
+## Install
 
-FactoryLM Vision captures a live frame from the factory floor and reads real-time PLC registers over Modbus TCP, then feeds both into **NVIDIA Cosmos Reason2-8B** (self-hosted via vLLM on a Vast.ai L40S GPU). The model reasons across both modalities and returns a structured diagnosis: what it sees, what the instruments say, where they conflict, and what the technician should check first.
+### Option A — Pre-built Image (fastest)
 
-A technician texts their factory from their phone. The AI answers.
+1. Download `PiFactory-v1.0.0.img.xz` from [Releases](../../releases)
+2. Flash to microSD with [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+3. Insert SD card, power on the Pi
+4. Connect your phone to **PiFactory-Connect** WiFi (password: `factorylm`)
+5. Open `http://192.168.4.1:8000/setup` — the wizard walks you through PLC discovery
 
-Next: AR glasses on the factory floor — look at a machine, ask what's wrong, see the diagnosis in your field of view.
+### Option B — Install on Existing Pi OS
+
+```bash
+git clone https://github.com/Mikecranesync/factorylm-cosmos-cookoff.git
+cd factorylm-cosmos-cookoff
+sudo bash pi-factory/setup.sh
+sudo reboot
+```
+
+After reboot, connect to **PiFactory-Connect** WiFi and open the setup wizard.
+
+### Option C — Developer Mode (no Pi needed)
+
+```bash
+git clone https://github.com/Mikecranesync/factorylm-cosmos-cookoff.git
+cd factorylm-cosmos-cookoff
+pip install -r requirements.txt
+FACTORYLM_NET_MODE=sim python -m uvicorn net.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000/setup` to walk through the wizard with simulated PLC data.
 
 ---
 
 ## Architecture
 
 ```
-+------------------------------------------------------------------+
-|                     TECHNICIAN INTERFACE                          |
-|   Phone / Telegram  →  "Is the conveyor jammed?"                 |
-+------------------------------------------------------------------+
+  Phone / Laptop (browser)
+         |
+    PiFactory-Connect WiFi
          |
          v
-+------------------------------------------------------------------+
-|                     DIAGNOSIS ENGINE                              |
-|   cookoff/diagnosis_engine.py                                    |
-|   Captures frame + reads PLC tags → builds multimodal prompt     |
-+------------------------------------------------------------------+
-         |                          |
-         v                          v
-+------------------+    +------------------------+
-|  Factory I/O     |    |  Allen-Bradley         |
-|  Screen Capture  |    |  Micro 820 PLC         |
-|  (PIL)           |    |  via Modbus TCP        |
-+------------------+    +------------------------+
-         |                          |
-         v                          v
-+------------------------------------------------------------------+
-|                   COSMOS REASON2-8B                               |
-|   Self-hosted on Vast.ai L40S via vLLM 0.15.1                   |
-|   OpenAI-compatible /v1/chat/completions endpoint                |
-+------------------------------------------------------------------+
-         |
-         v
-+------------------------------------------------------------------+
-|                   STRUCTURED DIAGNOSIS                            |
-|   - Visual observations (what the camera sees)                   |
-|   - PLC anomalies (what the instruments report)                  |
-|   - Cross-modal conflicts (motor ON but belt stopped)            |
-|   - Recommended actions (check roller alignment)                 |
-+------------------------------------------------------------------+
+  ┌──────────────────────────────┐
+  │  Raspberry Pi (Pi Factory)   │
+  │                              │
+  │  FastAPI (port 8000)         │
+  │    /setup     → Wizard UI    │
+  │    /api/plc/* → PLC mgmt     │
+  │    /api/wifi  → Network cfg  │
+  │                              │
+  │  Poller (5 Hz)               │
+  │    → Reads Modbus TCP tags   │
+  │    → Writes SQLite history   │
+  │    → Runs fault detection    │
+  │                              │
+  │  Fault Engine (8 codes)      │
+  │    E001 E-Stop               │
+  │    M001 Overcurrent          │
+  │    T001 Over-temperature     │
+  │    C001 Conveyor jam         │
+  │    M002 Motor stopped        │
+  │    P001 Low pressure         │
+  │    M003 Speed mismatch       │
+  │    T002 Elevated temp        │
+  └───────────┬──────────────────┘
+              │ Modbus TCP
+              v
+  ┌──────────────────────────────┐
+  │  PLC (Allen-Bradley, etc.)   │
+  │  Coils 0-17, Registers 100+ │
+  └──────────────────────────────┘
 ```
 
 ---
 
-## Quick Start
+## Compatible Hardware
 
-```bash
-# 1. Clone
-git clone https://github.com/Mikecranesync/factorylm-cosmos-cookoff.git
-cd factorylm-cosmos-cookoff
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your vLLM endpoint and PLC IP
-
-# 4. Start the Matrix API (dashboard + diagnosis endpoint)
-python -m uvicorn services.matrix.app:app --host 0.0.0.0 --port 8000
-
-# 5. Run a diagnosis session (simulator mode — no hardware needed)
-python cookoff/test_session.py
-```
+| Component | Supported |
+|-----------|-----------|
+| **Pi** | Raspberry Pi 3B+, Pi 4 (all RAM), Pi 5, Pi Zero 2W |
+| **PLC** | Any Modbus TCP device (tested: Allen-Bradley Micro 820) |
+| **VFD** | ATO VFD via RS485 (optional) |
 
 ---
 
-## Key Results
+## API Endpoints
 
-From the validated end-to-end test on February 20, 2026:
-
-| Metric | Value |
-|--------|-------|
-| **End-to-end diagnosis time** | 17.0 seconds |
-| **PLC tags read** | 19 live registers via Modbus TCP |
-| **Key finding** | Motor paradox: motor energized but speed register at zero |
-| **Cross-modal detection** | Visual (stationary box on conveyor) + PLC (motor ON, speed 0) |
-| **Model** | Cosmos Reason2-8B via vLLM 0.15.1 |
-| **GPU** | NVIDIA L40S (48 GB VRAM) on Vast.ai |
-
-The motor paradox — where the PLC reports the motor as energized but the speed register reads zero — is a fault that **neither video nor telemetry alone can diagnose**. Only the fusion of both modalities surfaces it.
-
----
-
-## Hardware & Infrastructure
-
-| Component | Details |
-|-----------|---------|
-| **PLC** | Allen-Bradley Micro 820 (2080-LC30-48QWB) |
-| **Simulation** | Factory I/O "From A to B" scene, Modbus TCP |
-| **Edge Device** | Raspberry Pi (on-premise data collection) |
-| **GPU** | NVIDIA L40S (48 GB VRAM) via Vast.ai |
-| **Model Runtime** | vLLM 0.15.1, OpenAI-compatible API |
-| **Model** | NVIDIA Cosmos Reason2-8B |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/setup` | Setup wizard (6-screen flow) |
+| GET | `/api/status` | Gateway health + PLC connection state |
+| GET | `/api/gateway/id` | Unique gateway identifier |
+| GET | `/api/gateway/qr` | QR code PNG for pairing |
+| GET | `/api/plc/scan` | Discover PLCs on subnet |
+| POST | `/api/plc/extract` | Auto-detect tags from a PLC |
+| POST | `/api/plc/config` | Save PLC config + start polling |
+| GET | `/api/plc/live` | Current tag values |
+| POST | `/api/plc/live` | Filtered live values (wizard) |
+| GET | `/api/plc/tags` | Saved tag configuration |
+| GET | `/api/wifi/scan` | Available WiFi networks |
+| POST | `/api/wifi/connect` | Connect Pi to WiFi |
 
 ---
 
@@ -129,30 +122,54 @@ The motor paradox — where the PLC reports the motor as energized but the speed
 
 ```
 factorylm-cosmos-cookoff/
-├── cookoff/              # Competition entry: whitepaper, user manual, core engine
-│   ├── WHITEPAPER.md     # Full technical whitepaper (650+ lines)
-│   ├── USER_MANUAL.md    # Complete setup and usage guide
-│   ├── diagnosis_engine.py  # Core: captures frame + PLC tags → Cosmos prompt
-│   ├── capture_fio.py    # Factory I/O screen capture utility
-│   └── test_session.py   # End-to-end test harness
-├── cosmos/               # Cosmos Reason2-8B client and agent
-├── diagnosis/            # Fault classification and prompt templates
-├── services/             # Matrix API dashboard + PLC Modbus driver
-├── sim/                  # Factory I/O bridge and PLC simulator
-├── config/               # YAML configuration files
-├── video/                # Video analysis pipeline
-├── infra/                # Docker Compose for local deployment
-└── docs/                 # Architecture and demo runbook
+├── net/                   # Core application
+│   ├── api/main.py        # FastAPI gateway server
+│   ├── drivers/           # PLC discovery, Modbus, EtherNet/IP
+│   ├── diagnosis/         # Fault engine (8 codes)
+│   ├── portal/wizard.html # 6-screen setup wizard
+│   ├── services/poller.py # Background tag polling
+│   ├── sim/               # PLC simulator for dev/testing
+│   └── platform/          # WiFi scanner (Linux/macOS/mock)
+├── services/matrix/       # Matrix API (telemetry + incidents + Cosmos insights)
+├── pi-factory/            # Raspberry Pi deployment
+│   ├── setup.sh           # DIY installer
+│   ├── first_boot.sh      # First-boot identity generation
+│   ├── systemd/           # Service files
+│   └── configs/           # hostapd, dnsmasq, motd
+├── factorylm-image/       # pi-gen stages for .img.xz build
+├── cookoff/               # NVIDIA Cosmos Cookoff submission
+│   ├── WHITEPAPER.md      # Technical whitepaper
+│   ├── diagnosis_engine.py # Multimodal AI diagnosis
+│   └── USER_MANUAL.md     # Full operator manual
+├── tests/                 # 70 pytest tests (sim mode)
+├── .github/workflows/     # CI + image build pipelines
+└── docs/                  # Architecture, wiring guide, playbook
+```
+
+---
+
+## Development
+
+```bash
+# Run tests (no hardware needed)
+FACTORYLM_NET_MODE=sim python -m pytest tests/ -v
+
+# Start the gateway in sim mode
+FACTORYLM_NET_MODE=sim python -m uvicorn net.api.main:app --host 0.0.0.0 --port 8000
+
+# Start the Matrix dashboard
+MATRIX_DB_PATH=matrix.db python -m uvicorn services.matrix.app:app --host 0.0.0.0 --port 8001
 ```
 
 ---
 
 ## Documentation
 
-- **[Whitepaper](cookoff/WHITEPAPER.md)** — Full technical paper: problem, architecture, implementation, validation results
-- **[User Manual](cookoff/USER_MANUAL.md)** — Step-by-step setup guide for all components
-- **[Architecture](docs/cosmos_architecture.md)** — System design and data flow diagrams
-- **[Demo Runbook](docs/cosmos_cookoff_demo_runbook.md)** — How to run the live demo
+- **[Pi Factory Guide](pi-factory/PI_FACTORY_GUIDE.md)** — Hardware setup and deployment
+- **[Conveyor of Destiny Playbook](docs/CONVEYOR_OF_DESTINY.md)** — Complete system playbook
+- **[Wiring Guide](docs/WIRING_GUIDE.md)** — PLC and VFD wiring diagrams
+- **[Whitepaper](cookoff/WHITEPAPER.md)** — Cosmos Reason2-8B multimodal diagnosis
+- **[User Manual](cookoff/USER_MANUAL.md)** — Operator guide for all components
 
 ---
 
@@ -162,4 +179,4 @@ factorylm-cosmos-cookoff/
 
 ---
 
-*Built by [FactoryLM](https://factorylm.com) for the NVIDIA Cosmos Cookoff 2026.*
+*Built by [FactoryLM](https://factorylm.com) — making factories smarter, one Pi at a time.*
