@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 #  PI FACTORY — Master Setup Script
-#  Transforms a fresh Raspberry Pi OS into the FactoryLM Connect appliance.
+#  Transforms a fresh Raspberry Pi OS into the Pi Factory appliance.
 #
 #  Usage:
 #    curl -sSL https://raw.githubusercontent.com/Mikecranesync/factorylm-cosmos-cookoff/main/pi-factory/setup.sh | sudo bash
@@ -60,7 +60,7 @@ print_banner() {
     echo "  ║          ┗━━━╝ ┗━━━╝                          ║"
     echo "  ║                                               ║"
     echo "  ║        P I   F A C T O R Y                    ║"
-    echo "  ║        by FactoryLM                           ║"
+    echo "  ║        by Pi Factory                           ║"
     echo "  ║                                               ║"
     echo "  ║   Industrial PLC Monitor + AI Diagnosis       ║"
     echo "  ║   Type a command. Move a machine.             ║"
@@ -200,7 +200,7 @@ setup_python_venv() {
 # Step 4: Copy Application Code
 # =============================================================================
 copy_app_code() {
-    step "4/9" "Deploying FactoryLM Connect application"
+    step "4/9" "Deploying Pi Factory application"
 
     # Copy net/ application package
     if [[ -d "${REPO_DIR}/net" ]]; then
@@ -308,7 +308,7 @@ install_services() {
     # Main application service
     cat > /etc/systemd/system/pi-factory.service << SERVICE
 [Unit]
-Description=Pi Factory — FactoryLM Connect Gateway
+Description=Pi Factory — Pi Factory Gateway
 Documentation=https://github.com/Mikecranesync/factorylm-cosmos-cookoff
 After=network-online.target
 Wants=network-online.target
@@ -404,7 +404,7 @@ setup_branding() {
   ║            ━━━━━━━━━━━━━━━━━━━━━━━━               ║
   ║                                                   ║
   ║   Industrial PLC Monitor + AI Diagnosis           ║
-  ║   Powered by FactoryLM                            ║
+  ║   Powered by Pi Factory                            ║
   ║                                                   ║
   ║   Dashboard:  http://pi-factory.local:8000        ║
   ║   WiFi AP:    PiFactory-Connect                   ║

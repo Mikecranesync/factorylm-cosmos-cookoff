@@ -487,7 +487,7 @@ HTML_DASHBOARD = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FactoryLM Matrix — Cosmos Cookoff</title>
+<title>Pi Factory — Matrix Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 16px; }
@@ -516,8 +516,8 @@ HTML_DASHBOARD = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>🏭 FactoryLM Matrix</h1>
-<p style="color:#888; font-size:0.85rem;">NVIDIA Cosmos Cookoff 2026 — Live Dashboard | <a href="/video" style="color:#76b900;">🎬 Video Log</a></p>
+<h1>🏭 Pi Factory Matrix</h1>
+<p style="color:#888; font-size:0.85rem;">Live Dashboard | <a href="/video" style="color:#76b900;">🎬 Video Log</a></p>
 
 <div class="grid">
   <div class="card" id="live-tags-card">
@@ -656,7 +656,7 @@ HTML_VIDEO_LOG = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FactoryLM — Video Log</title>
+<title>Pi Factory — Video Log</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 16px; }

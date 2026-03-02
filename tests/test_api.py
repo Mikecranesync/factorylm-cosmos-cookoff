@@ -37,7 +37,7 @@ def test_live_endpoint_returns_values():
 def test_wizard_serves_html():
     resp = client.get("/setup")
     assert resp.status_code == 200
-    assert "FactoryLM" in resp.text
+    assert "Pi Factory" in resp.text
 
 def test_status_endpoint():
     resp = client.get("/api/status")

@@ -44,7 +44,7 @@ The `setup.sh` script runs 9 steps automatically:
 1. **System deps** — installs hostapd, dnsmasq, Python 3, networking tools
 2. **Directory structure** — creates `/opt/factorylm/` with all subdirs
 3. **Python venv** — installs pymodbus, pycomm3, opcua, FastAPI, uvicorn
-4. **App deployment** — copies all FactoryLM Connect code
+4. **App deployment** — copies all Pi Factory application code
 5. **WiFi captive portal** — sets up `PiFactory-Connect` hotspot on `192.168.4.1`
 6. **Systemd services** — `pi-factory.service` auto-starts on boot + watchdog
 7. **Gateway identity** — generates unique `flm-xxxxxxxxxxxx` ID
@@ -192,4 +192,4 @@ pf-restart
 
 ---
 
-*Pi Factory by FactoryLM — Type a command. Move a machine. From anywhere on Earth.*
+*Pi Factory — Type a command. Move a machine. From anywhere on Earth.*

@@ -1,5 +1,5 @@
 """
-FactoryLM Net — Edge Gateway API
+Pi Factory Net — Edge Gateway API
 
 FastAPI backend serving the setup wizard and PLC management endpoints.
 Reads FACTORYLM_NET_MODE env var: "real" (default) or "sim".
@@ -259,17 +259,17 @@ def _save_tag_name(plc_id: str, modbus_path: str, human_name: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("FactoryLM Net starting (mode=%s, db=%s)", MODE, DB_PATH)
+    logger.info("Pi Factory Net starting (mode=%s, db=%s)", MODE, DB_PATH)
     _init_db()
     gateway_id = _get_gateway_id()
     logger.info(f"Gateway ID: {gateway_id}")
     yield
     poller.stop()
-    logger.info("FactoryLM Net stopped")
+    logger.info("Pi Factory Net stopped")
 
 
 app = FastAPI(
-    title="FactoryLM Net",
+    title="Pi Factory Net",
     version="0.1.0",
     lifespan=lifespan,
 )

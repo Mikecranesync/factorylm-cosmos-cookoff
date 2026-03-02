@@ -1,0 +1,19 @@
+[Unit]
+Description=Pi Factory Connect Gateway
+Documentation=https://factorylm.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/factorylm
+Environment="PATH=/opt/factorylm/venv/bin"
+ExecStart=/opt/factorylm/venv/bin/python -m app.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

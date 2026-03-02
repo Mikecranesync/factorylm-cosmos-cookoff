@@ -1,0 +1,17 @@
+[Unit]
+Description=Pi Factory First Boot Setup
+Before=factorylm-connect.service
+Before=multi-user.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/factorylm/first_boot.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

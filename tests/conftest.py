@@ -1,4 +1,4 @@
-"""Shared test fixtures for FactoryLM Connect."""
+"""Shared test fixtures for Pi Factory."""
 import os
 import tempfile
 

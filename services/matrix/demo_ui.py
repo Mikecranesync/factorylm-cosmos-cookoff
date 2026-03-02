@@ -1,5 +1,5 @@
 """
-FactoryLM Demo UI — Fault Diagnosis Dashboard
+Pi Factory Demo UI — Fault Diagnosis Dashboard
 ==============================================
 FastAPI app with live IO display and "Why stopped?" diagnosis.
 
@@ -30,7 +30,7 @@ from cosmos.client import CosmosClient
 MATRIX_API = os.getenv("MATRIX_API", "http://localhost:8000")
 NVIDIA_API_KEY = os.getenv("NVIDIA_COSMOS_API_KEY", "")
 
-app = FastAPI(title="FactoryLM Demo", version="1.0.0")
+app = FastAPI(title="Pi Factory Demo", version="1.0.0")
 
 
 # ============================================================================
@@ -170,7 +170,7 @@ async def demo_dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FactoryLM Demo - Fault Diagnosis</title>
+    <title>Pi Factory Demo - Fault Diagnosis</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -348,7 +348,7 @@ async def demo_dashboard():
 </head>
 <body>
     <div class="header">
-        <h1>FactoryLM Demo</h1>
+        <h1>Pi Factory Demo</h1>
         <p>Live Fault Diagnosis for Conveyor Cell</p>
     </div>
 
@@ -409,7 +409,7 @@ async def demo_dashboard():
     </div>
 
     <div class="footer">
-        FactoryLM v1 Demo | Pipeline: Factory I/O -> Modbus -> Matrix -> Llama 3.1 70B -> Diagnosis
+        Pi Factory v1 Demo | Pipeline: Factory I/O -> Modbus -> Matrix -> Llama 3.1 70B -> Diagnosis
     </div>
 
     <script>
@@ -610,5 +610,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting FactoryLM Demo UI on http://0.0.0.0:8080")
+    print("Starting Pi Factory Demo UI on http://0.0.0.0:8080")
     uvicorn.run(app, host="0.0.0.0", port=8080)
