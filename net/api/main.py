@@ -274,7 +274,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pi Factory Net",
-    version="1.1.1",
+    version="1.1.2",
     lifespan=lifespan,
 )
 
