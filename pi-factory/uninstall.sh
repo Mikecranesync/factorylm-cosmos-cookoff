@@ -53,8 +53,11 @@ rm -rf /opt/factorylm
 
 echo "Removing WiFi AP config..."
 rm -f /etc/dnsmasq.d/pi-factory.conf
-# Remove dhcpcd additions (best effort)
-sed -i '/# Pi Factory/,+3d' /etc/dhcpcd.conf 2>/dev/null || true
+rm -f /etc/hostapd/hostapd.conf
+# Remove NetworkManager unmanage rule + systemd-networkd override (Bookworm)
+rm -f /etc/NetworkManager/conf.d/pi-factory-unmanage-wlan0.conf
+rm -f /etc/systemd/network/10-pf-wlan0.network
+systemctl reload NetworkManager 2>/dev/null || true
 
 echo "Removing branding..."
 rm -f /etc/profile.d/pi-factory.sh

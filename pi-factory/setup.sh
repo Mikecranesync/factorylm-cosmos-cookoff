@@ -281,14 +281,34 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 address=/#/${WIFI_IP}
 DNSMASQ
 
-    # Static IP for wlan0
-    cat >> /etc/dhcpcd.conf << DHCPCD
+    # Static IP for wlan0 via NetworkManager (Bookworm)
+    # Remove any existing Pi Factory wlan0 connection
+    nmcli con delete "pf-wlan0" 2>/dev/null || true
 
-# Pi Factory — WiFi AP static IP
-interface wlan0
-    static ip_address=${WIFI_IP}/24
-    nohook wpa_supplicant
-DHCPCD
+    # Create static wlan0 connection (used by hostapd, not managed by NM)
+    # We use ip command + systemd-networkd override instead
+    cat > /etc/systemd/network/10-pf-wlan0.network << NETD
+[Match]
+Name=wlan0
+
+[Network]
+Address=${WIFI_IP}/24
+DHCPServer=no
+NETD
+
+    # Tell NetworkManager to leave wlan0 alone (hostapd manages it)
+    cat > /etc/NetworkManager/conf.d/pi-factory-unmanage-wlan0.conf << NM_CONF
+[keyfile]
+unmanaged-devices=interface-name:wlan0
+NM_CONF
+
+    # Reload NetworkManager to pick up the unmanage rule
+    systemctl reload NetworkManager 2>/dev/null || true
+
+    # Set wlan0 IP directly (takes effect now, before reboot)
+    ip addr flush dev wlan0 2>/dev/null || true
+    ip addr add ${WIFI_IP}/24 dev wlan0 2>/dev/null || true
+    ip link set wlan0 up 2>/dev/null || true
 
     # Unmask and enable
     systemctl unmask hostapd
