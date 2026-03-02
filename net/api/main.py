@@ -283,6 +283,28 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
+# Global exception handler — catch any unhandled errors and return JSON
+# ---------------------------------------------------------------------------
+
+from starlette.requests import Request
+from starlette.responses import Response
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> Response:
+    """Catch unhandled exceptions and return a structured JSON error."""
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_error",
+            "detail": str(exc),
+            "path": request.url.path,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 

@@ -124,6 +124,26 @@ app.add_middleware(
 )
 
 
+# --- Global exception handler ---
+
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import JSONResponse as StarletteJSONResponse
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: StarletteRequest, exc: Exception) -> StarletteJSONResponse:
+    """Catch unhandled exceptions and return structured JSON error."""
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return StarletteJSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_error",
+            "detail": str(exc),
+            "path": request.url.path,
+        },
+    )
+
+
 # --- Pydantic models ---
 
 class TagPayload(BaseModel):

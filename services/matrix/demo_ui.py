@@ -71,25 +71,29 @@ async def get_live_tags():
 @app.get("/api/faults")
 async def get_faults():
     """Detect faults from current tags."""
-    tags = await get_live_tags()
-    if "error" in tags:
-        return tags
+    try:
+        tags = await get_live_tags()
+        if "error" in tags:
+            return tags
 
-    faults = detect_faults(tags)
-    return {
-        "faults": [
-            {
-                "code": f.fault_code,
-                "severity": f.severity.value,
-                "title": f.title,
-                "description": f.description,
-                "causes": f.likely_causes,
-                "checks": f.suggested_checks
-            }
-            for f in faults
-        ],
-        "timestamp": datetime.now().isoformat()
-    }
+        faults = detect_faults(tags)
+        return {
+            "faults": [
+                {
+                    "code": f.fault_code,
+                    "severity": f.severity.value,
+                    "title": f.title,
+                    "description": f.description,
+                    "causes": f.likely_causes,
+                    "checks": f.suggested_checks
+                }
+                for f in faults
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error("Fault detection failed: %s", e)
+        return {"error": "fault_detection_failed", "detail": str(e)}
 
 
 @app.post("/api/diagnose", response_model=DiagnoseResponse)

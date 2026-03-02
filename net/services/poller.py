@@ -196,24 +196,43 @@ class Poller:
             logger.info("Poller using ModbusReader → %s:%d", self._plc_ip, self._plc_port)
 
     def _poll_loop(self):
-        """Main loop: 5Hz read, 1Hz history write."""
-        self._init_source()
+        """Main loop: 5Hz read, 1Hz history write.
+
+        Wrapped in a top-level try/except so the background thread
+        never dies silently — errors are logged and the loop retries.
+        """
+        try:
+            self._init_source()
+        except Exception as e:
+            logger.error("Poller failed to initialise source: %s", e, exc_info=True)
+            return
 
         poll_interval = 0.2  # 5Hz
         history_interval = 1.0  # 1Hz
         last_history_write = 0.0
+        consecutive_errors = 0
 
         while not self._stop.is_set():
-            tags = self._read_once()
-            if tags:
-                with self._lock:
-                    self._latest = tags
+            try:
+                tags = self._read_once()
+                if tags:
+                    with self._lock:
+                        self._latest = tags
 
-                # Write to history at 1Hz
-                now = time.monotonic()
-                if now - last_history_write >= history_interval:
-                    self._write_history(tags)
-                    last_history_write = now
+                    # Write to history at 1Hz
+                    now = time.monotonic()
+                    if now - last_history_write >= history_interval:
+                        self._write_history(tags)
+                        last_history_write = now
+
+                consecutive_errors = 0
+            except Exception as e:
+                consecutive_errors += 1
+                logger.error("Poller read error (#%d): %s", consecutive_errors, e)
+                if consecutive_errors >= 10:
+                    logger.critical("Poller exceeded 10 consecutive errors, backing off 10s")
+                    self._stop.wait(10.0)
+                    consecutive_errors = 0
 
             self._stop.wait(poll_interval)
 
