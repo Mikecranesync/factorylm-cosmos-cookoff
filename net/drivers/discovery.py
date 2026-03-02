@@ -175,14 +175,65 @@ async def _detect_protocols(ip: str, timeout: float = 0.3) -> dict:
     return results
 
 
+async def _probe_ethip(
+    ip: str,
+    port: int = 44818,
+    timeout: float = 0.5,
+) -> DiscoveredPLC | None:
+    """TCP connect to EtherNet/IP port and fingerprint via pycomm3."""
+    t0 = time.monotonic()
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, port),
+            timeout=timeout,
+        )
+        writer.close()
+        await writer.wait_closed()
+    except (asyncio.TimeoutError, OSError):
+        return None
+
+    elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
+
+    # Port is open — try pycomm3 for identity
+    brand, model, template = "Allen-Bradley", "Unknown", "micro820"
+    try:
+        from pycomm3 import LogixDriver
+
+        def _identify():
+            with LogixDriver(ip) as plc:
+                info = plc.info
+                return info.get("product_name", "Unknown")
+
+        loop = asyncio.get_event_loop()
+        product = await loop.run_in_executor(None, _identify)
+        model = product
+    except Exception as exc:
+        logger.debug("pycomm3 identity failed for %s: %s", ip, exc)
+
+    protocols = await _detect_protocols(ip, timeout)
+    if not protocols:
+        protocols = {port: "EtherNet/IP"}
+
+    return DiscoveredPLC(
+        ip=ip,
+        port=port,
+        brand=brand,
+        model=model,
+        template=template,
+        response_ms=elapsed_ms,
+        protocol="EtherNet/IP",
+        protocols=protocols,
+    )
+
+
 async def scan_subnet(
     subnet: str = "192.168.1.0/24",
     port: int = 502,
-    timeout: float = 0.3,
+    timeout: float = 0.5,
     max_concurrent: int = 50,
 ) -> list[DiscoveredPLC]:
-    """Scan an entire subnet for Modbus TCP devices."""
-    logger.info("Scanning %s for Modbus devices on port %d", subnet, port)
+    """Scan an entire subnet for industrial PLCs (Modbus TCP + EtherNet/IP)."""
+    logger.info("Scanning %s for PLC devices", subnet)
     t0 = time.monotonic()
 
     try:
@@ -195,7 +246,11 @@ async def scan_subnet(
 
     async def bounded_probe(ip_str: str) -> DiscoveredPLC | None:
         async with semaphore:
-            return await _probe_host(ip_str, port, timeout)
+            # Try Modbus TCP first, then EtherNet/IP
+            result = await _probe_host(ip_str, port, timeout)
+            if result is not None:
+                return result
+            return await _probe_ethip(ip_str, 44818, timeout)
 
     tasks = [bounded_probe(str(ip)) for ip in network.hosts()]
     results = await asyncio.gather(*tasks)
