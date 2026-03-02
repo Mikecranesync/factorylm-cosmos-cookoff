@@ -44,6 +44,7 @@ def scan_wifi():
 def connect_wifi(ssid, password):
     return _wifi_scanner.connect_network(ssid, password)
 from net.services.poller import Poller
+from cosmos.client import CosmosClient
 
 # Try to import qrcode for QR generation
 try:
@@ -64,6 +65,9 @@ DB_PATH = os.environ.get("FACTORYLM_NET_DB", "net.db")
 
 # Shared poller instance
 poller = Poller(db_path=DB_PATH)
+
+# Cosmos AI client (singleton)
+cosmos_client = CosmosClient()
 
 WIZARD_PATH = Path(__file__).parent.parent / "portal" / "wizard.html"
 
@@ -270,7 +274,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pi Factory Net",
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -617,6 +621,47 @@ async def plc_config(body: dict):
         "plc_id": plc_id,
         "polling": poller.is_running,
         "mode": MODE,
+    }
+
+
+@app.post("/api/cosmos/diagnose")
+async def cosmos_diagnose():
+    """Run Cosmos Reason 2 diagnosis on current PLC tags.
+
+    Returns flat JSON with incident_id, summary, root_cause, confidence,
+    reasoning, suggested_checks, cosmos_model, and timestamp.
+    Works with both real NVIDIA API and stub mode.
+    """
+    tags = poller.latest
+    if tags is None:
+        raise HTTPException(
+            status_code=503,
+            detail="No PLC data available — configure and start polling first",
+        )
+
+    active_plc = _get_active_plc()
+    node_id = active_plc["plc_id"] if active_plc else "unknown"
+    incident_id = f"diag-{uuid.uuid4().hex[:8]}"
+
+    loop = asyncio.get_event_loop()
+    insight = await loop.run_in_executor(
+        None,
+        lambda: cosmos_client.analyze_incident(
+            incident_id=incident_id,
+            node_id=node_id,
+            tags=tags,
+        ),
+    )
+
+    return {
+        "incident_id": insight.incident_id,
+        "summary": insight.summary,
+        "root_cause": insight.root_cause,
+        "confidence": insight.confidence,
+        "reasoning": insight.reasoning,
+        "suggested_checks": insight.suggested_checks,
+        "cosmos_model": insight.cosmos_model,
+        "timestamp": insight.timestamp.isoformat(),
     }
 
 

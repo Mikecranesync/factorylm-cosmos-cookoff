@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi Factory - Wizard</title>
+    <title>Pi Factory v1.0.0 - Wizard</title>
     <style>
         * {
             margin: 0;
@@ -651,7 +651,7 @@
 </head>
 <body>
     <header>
-        <h1>Pi Factory</h1>
+        <h1>Pi Factory <span style="font-size: 12px; color: #888; font-weight: 400;">v1.0.0</span></h1>
     </header>
 
     <div class="progress-container">
@@ -720,6 +720,8 @@
                         <h3 style="color: #888; font-size: 14px; margin-bottom: 15px;">Found Devices</h3>
                         <ul class="device-list" id="device-list"></ul>
                     </div>
+
+                    <div id="connection-test-status" style="display: none; text-align: center; padding: 15px; margin-top: 10px; border-radius: 8px; font-size: 13px;"></div>
 
                     <div id="no-devices" style="display: none; text-align: center; padding: 30px 0;">
                         <div style="color: #888; margin-bottom: 20px;">No devices found</div>
@@ -837,6 +839,47 @@
                         No tags selected
                     </div>
                 </div>
+
+                <!-- AI Diagnostics Modal -->
+                <div id="diagnostics-modal" class="modal-overlay" style="display: none;">
+                    <div class="modal" style="max-width: 500px; max-height: 80vh; overflow-y: auto;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h2 style="margin: 0;">AI Diagnostics</h2>
+                            <button onclick="closeDiagnostics()" style="background: none; border: none; color: #888; font-size: 20px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div id="diag-loading" style="text-align: center; padding: 30px 0;">
+                            <div class="loading-spinner" style="margin: 0 auto 15px;"></div>
+                            <div style="color: #888;">Analyzing with Cosmos Reason 2...</div>
+                        </div>
+                        <div id="diag-content" style="display: none;">
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Summary</div>
+                                <div id="diag-summary" style="font-size: 14px;"></div>
+                            </div>
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Root Cause</div>
+                                <div id="diag-root-cause" style="font-size: 14px; color: #ff9800;"></div>
+                            </div>
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Confidence</div>
+                                <div style="background: #1a2635; border-radius: 4px; height: 8px; overflow: hidden;">
+                                    <div id="diag-confidence-bar" style="height: 100%; background: #4a9eff; border-radius: 4px; transition: width 0.5s;"></div>
+                                </div>
+                                <div id="diag-confidence-text" style="font-size: 12px; color: #888; margin-top: 4px;"></div>
+                            </div>
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Reasoning</div>
+                                <div id="diag-reasoning" style="font-size: 13px; color: #b0b0b0;"></div>
+                            </div>
+                            <div style="margin-bottom: 15px;">
+                                <div style="color: #888; font-size: 12px; margin-bottom: 8px;">Suggested Actions</div>
+                                <ul id="diag-checks" style="list-style: none; padding: 0; margin: 0;"></ul>
+                            </div>
+                            <div id="diag-model" style="font-size: 11px; color: #555; text-align: right;"></div>
+                        </div>
+                        <div id="diag-error" style="display: none; color: #f44336; text-align: center; padding: 20px 0;"></div>
+                    </div>
+                </div>
             </div>
             <div class="button-group">
                 <div class="panel-controls">
@@ -909,7 +952,45 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadGatewayId();
             generateQRCode();
+            checkSessionResume();
         });
+
+        // Session resume — if PLC is already configured and polling, skip to Screen 5
+        async function checkSessionResume() {
+            try {
+                const resp = await fetch('/api/status');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.plc && data.plc.connected && data.plc.polling) {
+                    // Populate selected device from status
+                    state.selectedDevice = {
+                        ip: data.plc.ip,
+                        port: data.plc.port,
+                        protocol: 'Modbus TCP',
+                        brand: '',
+                        template: 'micro820'
+                    };
+                    // Fetch saved tags to populate selectedTags
+                    try {
+                        const tagsResp = await fetch('/api/plc/tags');
+                        if (tagsResp.ok) {
+                            const tagsData = await tagsResp.json();
+                            if (tagsData.tags && Array.isArray(tagsData.tags)) {
+                                state.selectedTags = tagsData.tags;
+                                state.protocol = 'modbus';
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not load saved tags:', e);
+                    }
+                    if (state.selectedTags.length > 0) {
+                        goToScreen(5);
+                    }
+                }
+            } catch (e) {
+                // No active session — wizard starts normally
+            }
+        }
 
         // Screen navigation
         function goToScreen(screenNum) {
@@ -1071,7 +1152,7 @@
             }
         }
 
-        function selectDevice(index) {
+        async function selectDevice(index) {
             state.selectedDevice = state.discoveredDevices[index];
             document.querySelectorAll('.device-item').forEach((item, i) => {
                 if (i === index) {
@@ -1081,9 +1162,40 @@
                 }
             });
 
-            // Auto-proceed to tag extraction
-            extractTags();
-            goToScreen(3);
+            // Connection test before proceeding
+            const statusDiv = document.getElementById('connection-test-status');
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = 'rgba(74, 158, 255, 0.1)';
+            statusDiv.style.color = '#4a9eff';
+            statusDiv.innerHTML = '<div class="loading-spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px;"></div>Testing connection...';
+
+            try {
+                const resp = await fetch('/api/plc/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ip: state.selectedDevice.ip,
+                        port: state.selectedDevice.port,
+                        template: state.selectedDevice.template || 'micro820'
+                    })
+                });
+
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const tagCount = data.tags ? Object.keys(data.tags).length : 0;
+
+                statusDiv.style.background = 'rgba(76, 175, 80, 0.1)';
+                statusDiv.style.color = '#4caf50';
+                statusDiv.textContent = `Connection OK (${tagCount} tags)`;
+
+                // Proceed to tag extraction
+                extractTags();
+                goToScreen(3);
+            } catch (err) {
+                statusDiv.style.background = 'rgba(244, 67, 54, 0.1)';
+                statusDiv.style.color = '#f44336';
+                statusDiv.textContent = `Connection failed: ${err.message}`;
+            }
         }
 
         // Tag Extraction
@@ -1169,7 +1281,7 @@
                         item.innerHTML = `
                             <div style="flex: 1;">
                                 <input type="text" class="tag-edit-input" value="${tag.name}" 
-                                    onchange="state.extractedTags[${index}].name = this.value;"
+                                    onchange="state.extractedTags[${index}].name = this.value; persistTagName(${index}, this.value);"
                                     placeholder="Tag name">
                                 <div class="tag-meta">Type: <strong>${tag.type}</strong> | Value: <span class="tag-value">${tag.value}</span></div>
                             </div>
@@ -1188,6 +1300,27 @@
                     tagList.appendChild(item);
                 });
             }
+        }
+
+        // Persist tag name to backend with debounce
+        const _tagNameTimers = {};
+        function persistTagName(index, newName) {
+            clearTimeout(_tagNameTimers[index]);
+            _tagNameTimers[index] = setTimeout(() => {
+                const tag = state.extractedTags[index];
+                if (!tag || !state.selectedDevice) return;
+                const plcId = 'plc-' + state.selectedDevice.ip;
+                const modbusPath = tag.address || tag.name;
+                fetch('/api/plc/name_tag', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        plc_id: plcId,
+                        modbus_path: modbusPath,
+                        human_name: newName
+                    })
+                }).catch(e => console.warn('Tag rename failed (may not be saved yet):', e));
+            }, 500);
         }
 
         // Tag Selection
@@ -1346,8 +1479,56 @@
             }
         }
 
-        function showDiagnostics() {
-            alert('AI Diagnostics: Your system is operating optimally. All devices are responding normally.');
+        async function showDiagnostics() {
+            const modal = document.getElementById('diagnostics-modal');
+            const loading = document.getElementById('diag-loading');
+            const content = document.getElementById('diag-content');
+            const errorDiv = document.getElementById('diag-error');
+
+            modal.style.display = 'flex';
+            loading.style.display = 'block';
+            content.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/cosmos/diagnose', { method: 'POST' });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+                    throw new Error(err.detail || `HTTP ${resp.status}`);
+                }
+                const data = await resp.json();
+
+                document.getElementById('diag-summary').textContent = data.summary;
+                document.getElementById('diag-root-cause').textContent = data.root_cause;
+
+                const pct = Math.round(data.confidence * 100);
+                document.getElementById('diag-confidence-bar').style.width = pct + '%';
+                document.getElementById('diag-confidence-text').textContent = pct + '% confidence';
+
+                document.getElementById('diag-reasoning').textContent = data.reasoning;
+
+                const checksList = document.getElementById('diag-checks');
+                checksList.innerHTML = '';
+                (data.suggested_checks || []).forEach(check => {
+                    const li = document.createElement('li');
+                    li.style.cssText = 'padding: 8px 12px; margin-bottom: 6px; background: rgba(74, 158, 255, 0.05); border-left: 3px solid #4a9eff; border-radius: 0 4px 4px 0; font-size: 13px;';
+                    li.textContent = check;
+                    checksList.appendChild(li);
+                });
+
+                document.getElementById('diag-model').textContent = 'Model: ' + (data.cosmos_model || 'unknown');
+
+                loading.style.display = 'none';
+                content.style.display = 'block';
+            } catch (err) {
+                loading.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Diagnosis failed: ' + err.message;
+            }
+        }
+
+        function closeDiagnostics() {
+            document.getElementById('diagnostics-modal').style.display = 'none';
         }
 
         function showAlerts() {
@@ -1504,5 +1685,8 @@
 
         observer.observe(document.getElementById('screen-4'), { attributes: true });
     </script>
+    <footer style="text-align: center; padding: 12px; color: #555; font-size: 11px; font-family: 'SF Mono', Monaco, monospace;">
+        Pi Factory v1.0.0 · FactoryLM
+    </footer>
 </body>
 </html>
