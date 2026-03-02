@@ -1,5 +1,7 @@
 """Matrix API — tag ingestion, incidents, and cosmos insights."""
 
+from __future__ import annotations
+
 import datetime
 import json
 import logging
@@ -100,14 +102,18 @@ def init_db():
     conn.close()
 
 
+# Initialize DB at import time to ensure tables exist before any request.
+# This is safe because init_db() uses CREATE TABLE IF NOT EXISTS.
+init_db()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
     logger.info("Matrix API started — db=%s", DB_PATH)
     yield
 
 
-app = FastAPI(title="FactoryLM Matrix API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Pi Factory Matrix API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -601,15 +601,41 @@ async def plc_config(body: dict):
 @app.get("/api/wifi/scan")
 async def wifi_scan():
     """Scan for WiFi networks (mock on macOS, real on Pi)."""
-    networks = scan_wifi()
-    return {"networks": networks}
+    try:
+        networks = scan_wifi()
+        return {"networks": networks}
+    except RuntimeError as e:
+        logger.warning(f"WiFi scan unavailable: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"error": "wifi_unavailable", "detail": str(e)},
+        )
+    except Exception as e:
+        logger.error(f"WiFi scan failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "wifi_scan_failed", "detail": str(e)},
+        )
 
 
 @app.post("/api/wifi/connect")
 async def wifi_connect_endpoint(req: WiFiConnectRequest):
     """Connect to a WiFi network."""
-    result = connect_wifi(req.ssid, req.password)
-    return result
+    try:
+        result = connect_wifi(req.ssid, req.password)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"WiFi connect unavailable: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"error": "wifi_unavailable", "detail": str(e)},
+        )
+    except Exception as e:
+        logger.error(f"WiFi connect failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "wifi_connect_failed", "detail": str(e)},
+        )
 
 
 @app.get("/api/gateway/qr")
