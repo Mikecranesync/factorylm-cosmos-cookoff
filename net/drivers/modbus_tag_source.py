@@ -4,6 +4,14 @@ Canonical Modbus tag source for Micro 820 PLC.
 Reads coils 0-17 and holding registers 100-105 using the canonical
 address map from CLAUDE.md, and returns TagSnapshot objects.
 
+Gist verification (2026-03-03): All coil addresses (0-17) and register
+addresses (100-105) verified against Mike's GitHub gists
+(VFD_MODBUS_PROGRESS.md, tp-link-gs10-setup-guide.md). PLC coil map,
+register map, and scaling factors (/10 for current and temperature)
+all match. E-stop dual-contact logic (coils[8] AND NOT coils[9])
+confirmed. See /cluster/betterclaw/memory/physical-layer.md for the
+full cross-reference.
+
 Usage:
     source = ModbusTagSource("192.168.1.100", 502)
     if source.connect():
