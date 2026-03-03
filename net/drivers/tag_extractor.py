@@ -77,7 +77,6 @@ class TagExtractor:
     Master auto-extraction engine coordinating protocol-specific readers.
 
     Implements priority waterfall scanning with asyncio-based concurrency.
-    Supports simulation mode for testing without actual hardware.
     """
 
     # Priority order for protocol scanning
@@ -94,7 +93,6 @@ class TagExtractor:
         plc_ip: str,
         semaphore_count: int = 50,
         timeout_seconds: float = 0.3,
-        sim_mode: Optional[bool] = None,
     ):
         """
         Initialize tag extractor.
@@ -104,21 +102,15 @@ class TagExtractor:
             plc_ip: IP address of target PLC
             semaphore_count: Maximum concurrent connections (default 50)
             timeout_seconds: Connection timeout in seconds (default 0.3)
-            sim_mode: Override SIM mode detection (uses env var if None)
         """
         self.gateway_id = gateway_id
         self.plc_ip = plc_ip
         self.semaphore = asyncio.Semaphore(semaphore_count)
         self.timeout = timeout_seconds
-        self.sim_mode = (
-            sim_mode
-            if sim_mode is not None
-            else os.getenv("FACTORYLM_NET_MODE") == "sim"
-        )
 
         logger.info(
             f"TagExtractor initialized - Gateway: {gateway_id}, "
-            f"PLC: {plc_ip}, SIM mode: {self.sim_mode}"
+            f"PLC: {plc_ip}"
         )
 
     async def extract(self) -> Optional[ExtractionResult]:
@@ -197,9 +189,6 @@ class TagExtractor:
         Returns:
             ExtractionResult with tags, or None.
         """
-        if self.sim_mode:
-            return self._get_simulated_result(protocol)
-
         # Import readers dynamically to gracefully handle missing dependencies
         if protocol == Protocol.ETHIP:
             from .ethip_reader import EtherNetIPReader
@@ -258,99 +247,6 @@ class TagExtractor:
             tags=[tag.to_dict() for tag in tags],
         )
 
-    def _get_simulated_result(self, protocol: Protocol) -> ExtractionResult:
-        """
-        Generate realistic simulated tag extraction result.
-
-        Args:
-            protocol: Protocol being simulated
-
-        Returns:
-            ExtractionResult with fake but realistic data.
-        """
-        sim_data = {
-            Protocol.ETHIP: {
-                "method": "cip_tag_upload",
-                "tags": [
-                    Tag(
-                        name="Motor_Run",
-                        plc_address="Motor_Run",
-                        type="BOOL",
-                        value=True,
-                        named=True,
-                        writable=False,
-                    ),
-                    Tag(
-                        name="Motor_Speed",
-                        plc_address="Motor_Speed",
-                        type="INT",
-                        value=1500,
-                        named=True,
-                        writable=True,
-                    ),
-                    Tag(
-                        name="System_Temperature",
-                        plc_address="System_Temperature",
-                        type="REAL",
-                        value=45.7,
-                        named=True,
-                        writable=False,
-                    ),
-                ],
-            },
-            Protocol.OPCUA: {
-                "method": "browse_tree",
-                "tags": [
-                    Tag(
-                        name="Devices/PLC/Motor/Status",
-                        plc_address="ns=2;s=Motor.Status",
-                        type="Boolean",
-                        value=True,
-                        named=True,
-                        writable=False,
-                    ),
-                    Tag(
-                        name="Devices/PLC/Motor/Speed",
-                        plc_address="ns=2;s=Motor.Speed",
-                        type="Int16",
-                        value=1500,
-                        named=True,
-                        writable=True,
-                    ),
-                ],
-            },
-            Protocol.S7: {
-                "method": "snap7_read",
-                "tags": [],
-            },
-            Protocol.MODBUS: {
-                "method": "modbus_brute_force",
-                "tags": [
-                    Tag(name="Conveyor", plc_address="coil:0", type="BOOL", value=True, writable=True),
-                    Tag(name="Emitter", plc_address="coil:1", type="BOOL", value=False, writable=True),
-                    Tag(name="SensorStart", plc_address="coil:2", type="BOOL", value=False),
-                    Tag(name="SensorEnd", plc_address="coil:3", type="BOOL", value=False),
-                    Tag(name="item_count", plc_address="hr:100", type="INT", value=247),
-                    Tag(name="motor_speed", plc_address="hr:101", type="INT", value=85, writable=True),
-                    Tag(name="motor_current", plc_address="hr:102", type="REAL", value=12.5),
-                    Tag(name="temperature", plc_address="hr:103", type="REAL", value=48.7),
-                    Tag(name="pressure", plc_address="hr:104", type="INT", value=60),
-                    Tag(name="error_code", plc_address="hr:105", type="INT", value=0),
-                ],
-            },
-        }
-
-        data = sim_data.get(protocol, {"method": "unknown", "tags": []})
-
-        return ExtractionResult(
-            gateway_id=self.gateway_id,
-            plc_ip=self.plc_ip,
-            protocol=protocol.value,
-            extraction_method=data["method"],
-            extracted_at=self._get_iso_timestamp(),
-            tags=[tag.to_dict() for tag in data["tags"]],
-        )
-
     @staticmethod
     def _get_iso_timestamp() -> str:
         """Get current UTC timestamp in ISO 8601 format."""
@@ -360,7 +256,6 @@ class TagExtractor:
 async def extract_tags(
     gateway_id: str,
     plc_ip: str,
-    sim_mode: Optional[bool] = None,
 ) -> Optional[ExtractionResult]:
     """
     Convenience function to extract tags from a PLC.
@@ -368,12 +263,11 @@ async def extract_tags(
     Args:
         gateway_id: Gateway identifier
         plc_ip: Target PLC IP address
-        sim_mode: Override simulation mode
 
     Returns:
         ExtractionResult with tags, or None if all protocols fail.
     """
-    extractor = TagExtractor(gateway_id, plc_ip, sim_mode=sim_mode)
+    extractor = TagExtractor(gateway_id, plc_ip)
     return await extractor.extract()
 
 
@@ -388,7 +282,6 @@ if __name__ == "__main__":
         result = await extract_tags(
             gateway_id="flm-demo123",
             plc_ip="192.168.1.100",
-            sim_mode=True,
         )
         if result:
             print(result.to_json())

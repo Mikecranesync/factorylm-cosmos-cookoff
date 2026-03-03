@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime
 import logging
 
-from net.sim.plc_simulator import ERROR_CODES, TagSnapshot
+from net.models.tags import ERROR_CODES, TagSnapshot
 
 logger = logging.getLogger(__name__)
 

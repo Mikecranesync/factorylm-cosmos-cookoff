@@ -1,7 +1,7 @@
-"""Tests for Publisher — aggregates data into CompactCom registers."""
+"""Tests for Publisher — aggregates data into 21 CompactCom registers."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from net.services.publisher import Publisher, _clamp, _belt_status_to_enum
 
@@ -34,13 +34,11 @@ def _make_publisher(
 
 
 def _make_belt_mock(rpm=30.5, speed_pct=50.0, offset_px=0, status=None):
-    """Create a mock belt tachometer."""
     belt = MagicMock()
     belt.rpm = rpm
     belt.speed_pct = speed_pct
     belt.offset_px = offset_px
     if status is None:
-        # Use a simple object with .value for the enum
         belt.status = MagicMock()
         belt.status.value = "normal"
     else:
@@ -49,7 +47,6 @@ def _make_belt_mock(rpm=30.5, speed_pct=50.0, offset_px=0, status=None):
 
 
 def _make_vfd_mock(output_hz=30.0, output_amps=4.5, fault_code=0):
-    """Create a mock VFD reader."""
     vfd = MagicMock()
     vfd.tick.return_value = {
         "vfd_connected": True,
@@ -60,30 +57,58 @@ def _make_vfd_mock(output_hz=30.0, output_amps=4.5, fault_code=0):
     return vfd
 
 
+def _full_poller_tags():
+    return {
+        "motor_running": True,
+        "motor_speed": 60,
+        "motor_current": 3.5,
+        "conveyor_running": True,
+        "temperature": 25.0,
+        "pressure": 100,
+        "sensor_1": True,
+        "sensor_2": False,
+        "e_stop": False,
+        "fault_alarm": False,
+        "error_code": 0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 def test_aggregate_with_all_sources():
-    """Mock poller/belt/VFD, verify 10 scaled values."""
+    """Mock poller/belt/VFD, verify 21 scaled values."""
     belt = _make_belt_mock(rpm=30.5, speed_pct=50.0, offset_px=10)
     vfd = _make_vfd_mock(output_hz=30.0, output_amps=4.5, fault_code=0)
-    poller_tags = {"error_code": 3, "motor_speed": 60}
+    poller_tags = _full_poller_tags()
+    poller_tags["error_code"] = 3
 
     pub, cc, _ = _make_publisher(poller_tags=poller_tags, belt=belt, vfd=vfd)
     values = pub._aggregate()
 
-    assert len(values) == 10
+    assert len(values) == 21
     assert values[0] == 305       # belt_rpm: 30.5 * 10
     assert values[1] == 500       # belt_speed_pct: 50.0 * 10
-    # values[2] = belt_status (depends on enum mapping, may be 0)
     assert values[3] == 32778     # belt_offset_px: 10 + 32768
     assert values[4] == 3000      # vfd_output_hz: 30.0 * 100
     assert values[5] == 45        # vfd_output_amps: 4.5 * 10
     assert values[6] == 0         # vfd_fault_code
-    assert values[7] == 3         # ai_fault_code from poller
-    assert values[8] == 0         # ai_confidence placeholder
-    assert values[9] == 1         # heartbeat (first call)
+    assert values[7] == 1         # motor_running
+    assert values[8] == 60        # motor_speed
+    assert values[9] == 35        # motor_current: 3.5 * 10
+    assert values[10] == 1        # conveyor_running
+    assert values[11] == 250      # temperature: 25.0 * 10
+    assert values[12] == 100      # pressure
+    assert values[13] == 1        # sensor_1
+    assert values[14] == 0        # sensor_2
+    assert values[15] == 0        # e_stop
+    assert values[16] == 0        # fault_alarm
+    assert values[17] == 3        # error_code
+    assert values[18] == 0        # ai_confidence
+    assert values[19] == 1        # heartbeat (first call)
+    # source_flags: plc=1, vfd=1, camera=1 -> 0b111 = 7
+    assert values[20] == 7
 
 
 def test_aggregate_no_belt_no_vfd():
@@ -91,7 +116,7 @@ def test_aggregate_no_belt_no_vfd():
     pub, cc, _ = _make_publisher(poller_tags=None, belt=None, vfd=None)
     values = pub._aggregate()
 
-    assert len(values) == 10
+    assert len(values) == 21
     assert values[0] == 0    # belt_rpm
     assert values[1] == 0    # belt_speed_pct
     assert values[2] == 0    # belt_status
@@ -99,20 +124,54 @@ def test_aggregate_no_belt_no_vfd():
     assert values[4] == 0    # vfd_output_hz
     assert values[5] == 0    # vfd_output_amps
     assert values[6] == 0    # vfd_fault_code
-    assert values[7] == 0    # ai_fault_code (no tags)
-    assert values[8] == 0    # ai_confidence
-    assert values[9] == 1    # heartbeat
+    assert values[7] == 0    # motor_running
+    assert values[8] == 0    # motor_speed
+    assert values[9] == 0    # motor_current
+    assert values[10] == 0   # conveyor_running
+    assert values[11] == 0   # temperature
+    assert values[12] == 0   # pressure
+    assert values[13] == 0   # sensor_1
+    assert values[14] == 0   # sensor_2
+    assert values[15] == 0   # e_stop
+    assert values[16] == 0   # fault_alarm
+    assert values[17] == 0   # error_code
+    assert values[18] == 0   # ai_confidence
+    assert values[19] == 1   # heartbeat
+    assert values[20] == 0   # source_flags: nothing connected
+
+
+def test_source_flags_plc_only():
+    """With only poller data, source_flags bit0=1."""
+    pub, _, _ = _make_publisher(poller_tags=_full_poller_tags(), belt=None, vfd=None)
+    values = pub._aggregate()
+    assert values[20] == 1  # only plc connected
+
+
+def test_source_flags_vfd_only():
+    """With only VFD, source_flags bit1=1."""
+    vfd = _make_vfd_mock()
+    pub, _, _ = _make_publisher(poller_tags=None, belt=None, vfd=vfd)
+    values = pub._aggregate()
+    assert values[20] == 2  # only vfd connected
+
+
+def test_source_flags_camera_only():
+    """With only camera, source_flags bit2=1."""
+    belt = _make_belt_mock()
+    pub, _, _ = _make_publisher(poller_tags=None, belt=belt, vfd=None)
+    values = pub._aggregate()
+    assert values[20] == 4  # only camera connected
 
 
 def test_heartbeat_increments():
-    """3 calls → 1, 2, 3."""
+    """3 calls -> 1, 2, 3."""
     pub, _, _ = _make_publisher()
     v1 = pub._aggregate()
     v2 = pub._aggregate()
     v3 = pub._aggregate()
-    assert v1[9] == 1
-    assert v2[9] == 2
-    assert v3[9] == 3
+    assert v1[19] == 1
+    assert v2[19] == 2
+    assert v3[19] == 3
 
 
 def test_heartbeat_wraps():
@@ -120,11 +179,10 @@ def test_heartbeat_wraps():
     pub, _, _ = _make_publisher()
     pub._heartbeat = 65535
     values = pub._aggregate()
-    assert values[9] == 0
+    assert values[19] == 0
 
 
 def test_clamp_overflow():
-    """Verify clamping at boundaries."""
     assert _clamp(-1) == 0
     assert _clamp(0) == 0
     assert _clamp(32768) == 32768
@@ -134,21 +192,18 @@ def test_clamp_overflow():
 
 
 def test_clamp_custom_bounds():
-    """Verify custom lo/hi."""
     assert _clamp(5, lo=10, hi=20) == 10
     assert _clamp(25, lo=10, hi=20) == 20
     assert _clamp(15, lo=10, hi=20) == 15
 
 
 def test_commands_property():
-    """Default commands are all zeros."""
     pub, _, _ = _make_publisher()
     cmds = pub.commands
     assert cmds == {"cmd_run": 0, "cmd_speed_pct": 0, "cmd_mode": 0, "cmd_reset_fault": 0}
 
 
 def test_set_belt_tachometer_hot_swap():
-    """Hot-swap belt tachometer reference."""
     pub, _, _ = _make_publisher(belt=None)
     assert pub._belt_tachometer is None
 
@@ -161,7 +216,6 @@ def test_set_belt_tachometer_hot_swap():
 
 
 def test_set_vfd_reader_hot_swap():
-    """Hot-swap VFD reader reference."""
     pub, _, _ = _make_publisher(vfd=None)
     assert pub._vfd_reader is None
 
@@ -174,7 +228,6 @@ def test_set_vfd_reader_hot_swap():
 
 
 def test_vfd_disconnected_returns_zeros():
-    """VFD returns vfd_connected=False → zeros."""
     vfd = MagicMock()
     vfd.tick.return_value = {"vfd_connected": False}
 
@@ -186,7 +239,5 @@ def test_vfd_disconnected_returns_zeros():
 
 
 def test_start_stop_lifecycle():
-    """Start and stop without error."""
     pub, cc, _ = _make_publisher()
-    # Don't actually start the thread — just verify the interface
     assert pub.is_running is False

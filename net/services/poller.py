@@ -1,9 +1,8 @@
 """
 Background poller — reads PLC tags at 5Hz, writes history at 1Hz.
 
-Respects FACTORYLM_NET_MODE env var:
-  - "real" (default): uses ModbusReader against live PLC
-  - "sim": uses PLCSimulator for demo/testing without hardware
+Real hardware only. If PLC_HOST is not set and no IP is configured,
+the poller returns None (honest nulls — no fake data).
 """
 from __future__ import annotations
 
@@ -24,9 +23,7 @@ class Poller:
 
     def __init__(self, db_path: str = "net.db"):
         self.db_path = db_path
-        self.mode = os.environ.get("FACTORYLM_NET_MODE", "real")
         self._reader = None
-        self._sim = None
         self._tag_source = None  # ModbusTagSource for PLC_HOST mode
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -51,8 +48,6 @@ class Poller:
     def plc_connected(self) -> bool:
         if self._tag_source is not None:
             return self._tag_source.connected
-        if self.mode == "sim":
-            return self._sim is not None
         return self._reader is not None and self._reader.connected
 
     def configure(
@@ -78,7 +73,7 @@ class Poller:
         self._stop.clear()
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
-        logger.info("Poller started (mode=%s)", self.mode)
+        logger.info("Poller started")
 
     def stop(self):
         """Stop the polling thread."""
@@ -170,9 +165,10 @@ class Poller:
         return {row[0]: row[1] for row in rows}
 
     def _init_source(self):
-        """Initialize tag source based on mode.
+        """Initialize tag source.
 
-        Priority: PLC_HOST env var > configured real Modbus > simulator.
+        Priority: PLC_HOST env var > configured IP via .configure().
+        No PLC_HOST + no configured IP = poller idles (honest nulls).
         """
         # PLC_HOST env var — highest priority, canonical Micro 820 map
         plc_host = os.environ.get("PLC_HOST", "")
@@ -193,32 +189,22 @@ class Poller:
             )
             self._tag_source = None
 
-        if self.mode == "sim":
-            from net.sim.plc_simulator import PLCSimulator
-            self._sim = PLCSimulator(
-                node_id="sim-net",
-                db_path=None,
-            )
-            # Override _store_snapshot to no-op (we handle history ourselves)
-            self._sim._store_snapshot = lambda snap: None
-            logger.info("Poller using PLCSimulator (sim mode)")
-        else:
-            if not self._plc_ip:
-                logger.warning("No PLC IP configured — poller idle")
-                return
-            if not self._template:
-                # Default to micro820 template
-                from net.drivers.discovery import load_template
-                self._template = load_template("micro820")
+        if not self._plc_ip:
+            logger.warning("No PLC IP configured — poller idle")
+            return
+        if not self._template:
+            # Default to micro820 template
+            from net.drivers.discovery import load_template
+            self._template = load_template("micro820")
 
-            from net.drivers.modbus_reader import ModbusReader
-            self._reader = ModbusReader(
-                host=self._plc_ip,
-                port=self._plc_port,
-                template=self._template,
-                custom_names=self._custom_names,
-            )
-            logger.info("Poller using ModbusReader → %s:%d", self._plc_ip, self._plc_port)
+        from net.drivers.modbus_reader import ModbusReader
+        self._reader = ModbusReader(
+            host=self._plc_ip,
+            port=self._plc_port,
+            template=self._template,
+            custom_names=self._custom_names,
+        )
+        logger.info("Poller using ModbusReader → %s:%d", self._plc_ip, self._plc_port)
 
     def _poll_loop(self):
         """Main loop: 5Hz read, 1Hz history write.
@@ -262,14 +248,11 @@ class Poller:
             self._stop.wait(poll_interval)
 
     def _read_once(self) -> dict | None:
-        """Single read from appropriate source."""
+        """Single read from appropriate source. Returns None if nothing configured."""
         if self._tag_source:
             snap = self._tag_source.tick()
             return snap.to_dict()
-        if self.mode == "sim" and self._sim:
-            snap = self._sim.tick()
-            return snap.to_dict()
-        elif self._reader:
+        if self._reader:
             return self._reader.read_tags()
         return None
 

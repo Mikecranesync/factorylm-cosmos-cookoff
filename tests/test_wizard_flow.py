@@ -1,28 +1,29 @@
-"""End-to-end test of the first-run wizard flow (sim mode).
+"""End-to-end test of the first-run wizard flow — mocks, no sim mode.
 
 Walks through every screen of the 6-step setup wizard, hitting
 the same API endpoints the JavaScript calls, in order:
 
-  Screen 1  Welcome      → GET  /api/gateway/id
-                          → GET  /api/gateway/qr   (optional, needs qrcode lib)
-  Screen 2  PLC Discovery→ GET  /api/plc/scan
-  Screen 3  Tag Extract  → POST /api/plc/extract
-  Screen 4  Tag Select   → (client-side only — verify extract payload shape)
-  Screen 5  Live Preview → POST /api/plc/config    (save selected tags)
-                          → POST /api/plc/live      (poll live data)
-  Screen 6  WiFi / Finish→ GET  /api/wifi/scan
-                          → POST /api/wifi/connect  (may 503 — OK)
-                          → GET  /api/status         (final health check)
+  Screen 1  Welcome      -> GET  /api/gateway/id
+                          -> GET  /api/gateway/qr   (optional, needs qrcode lib)
+  Screen 2  PLC Discovery-> GET  /api/plc/scan
+  Screen 3  Tag Extract  -> POST /api/plc/extract
+  Screen 4  Tag Select   -> (client-side only)
+  Screen 5  Live Preview -> POST /api/plc/config
+                          -> POST /api/plc/live
+  Screen 6  WiFi / Finish-> GET  /api/wifi/scan
+                          -> POST /api/wifi/connect
+                          -> GET  /api/status
 """
 
 import os
 import tempfile
-import time
+from unittest.mock import patch, AsyncMock
 
-os.environ["FACTORYLM_NET_MODE"] = "sim"
 os.environ["FACTORYLM_NET_DB"] = os.path.join(tempfile.mkdtemp(), "wizard_flow_test.db")
 
-from net.api.main import _init_db, app
+from net.api.main import _init_db, app, poller
+from net.drivers.discovery import DiscoveredPLC
+from net.drivers.tag_extractor import ExtractionResult
 
 _init_db()
 
@@ -31,22 +32,46 @@ from fastapi.testclient import TestClient
 client = TestClient(app)
 
 
-# ── Screen 1: Welcome ────────────────────────────────────────────────
+def _mock_scan():
+    """Return a mock scan result."""
+    return [
+        DiscoveredPLC(ip="192.168.1.100", port=502, brand="Allen-Bradley",
+                      model="Micro820", template="micro820", response_ms=12)
+    ]
+
+
+def _mock_extract_result():
+    """Return a mock extraction result."""
+    return ExtractionResult(
+        gateway_id="flm-test",
+        plc_ip="192.168.1.100",
+        protocol="Modbus",
+        extraction_method="modbus_brute_force",
+        extracted_at="2025-01-01T00:00:00Z",
+        tags=[
+            {"name": "Conveyor", "plc_address": "coil:0", "type": "BOOL",
+             "value": True, "address": None, "named": True, "writable": True},
+            {"name": "motor_speed", "plc_address": "hr:101", "type": "INT",
+             "value": 85, "address": None, "named": True, "writable": True},
+            {"name": "temperature", "plc_address": "hr:103", "type": "REAL",
+             "value": 48.7, "address": None, "named": True, "writable": False},
+        ],
+    )
+
+
+# -- Screen 1: Welcome --
 
 def test_screen1_gateway_id():
-    """Gateway ID is generated and returned."""
     resp = client.get("/api/gateway/id")
     assert resp.status_code == 200
     data = resp.json()
     assert "id" in data
     assert data["id"].startswith("flm-")
-    # Calling again returns the same ID (idempotent)
     resp2 = client.get("/api/gateway/id")
     assert resp2.json()["id"] == data["id"]
 
 
 def test_screen1_gateway_qr():
-    """QR endpoint returns PNG or graceful 503 if qrcode lib missing."""
     resp = client.get("/api/gateway/qr")
     assert resp.status_code in [200, 503]
     if resp.status_code == 200:
@@ -55,53 +80,44 @@ def test_screen1_gateway_qr():
         assert "qrcode" in resp.json().get("detail", "").lower()
 
 
-# ── Screen 2: PLC Discovery ──────────────────────────────────────────
+# -- Screen 2: PLC Discovery --
 
 def test_screen2_plc_scan():
-    """Scan returns at least one simulated device."""
-    resp = client.get("/api/plc/scan?subnet=192.168.1.0/24")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["mode"] == "sim"
-    assert len(data["devices"]) >= 1
-    dev = data["devices"][0]
-    # Each device has the fields the wizard JS expects
-    for key in ("ip", "port", "brand", "model", "template", "status"):
-        assert key in dev, f"Missing key '{key}' in device payload"
+    with patch("net.api.main.scan_subnet", new_callable=AsyncMock, return_value=_mock_scan()):
+        resp = client.get("/api/plc/scan?subnet=192.168.1.0/24")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "mode" not in data
+        assert len(data["devices"]) >= 1
+        dev = data["devices"][0]
+        for key in ("ip", "port", "brand", "model", "template", "status"):
+            assert key in dev, f"Missing key '{key}' in device payload"
 
 
-# ── Screen 3: Tag Extraction ─────────────────────────────────────────
+# -- Screen 3: Tag Extraction --
 
 def test_screen3_tag_extraction():
-    """Extract tags from a simulated PLC."""
-    resp = client.post("/api/plc/extract", json={"ip": "192.168.1.100", "port": 502})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "tags" in data
-    assert len(data["tags"]) > 0
-    # Each tag must have at least a name and address
-    tag = data["tags"][0]
-    assert "name" in tag or "tag" in tag or "address" in tag, (
-        f"Tag object missing expected keys: {list(tag.keys())}"
-    )
+    with patch("net.api.main.extract_tags", new_callable=AsyncMock, return_value=_mock_extract_result()):
+        resp = client.post("/api/plc/extract", json={"ip": "192.168.1.100", "port": 502})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "tags" in data
+        assert len(data["tags"]) > 0
 
 
-# ── Screen 4: Tag Selection (client-side) ─────────────────────────────
-# No API call — the wizard simply builds a list from Screen 3's tags.
-# We just verify that the extract response is iterable.
+# -- Screen 4: Tag Selection --
 
 def test_screen4_tag_selection_shape():
-    """The extract response can be iterated to build a selection list."""
-    resp = client.post("/api/plc/extract", json={"ip": "192.168.1.100", "port": 502})
-    tags = resp.json()["tags"]
-    assert isinstance(tags, list)
-    assert len(tags) >= 1
+    with patch("net.api.main.extract_tags", new_callable=AsyncMock, return_value=_mock_extract_result()):
+        resp = client.post("/api/plc/extract", json={"ip": "192.168.1.100", "port": 502})
+        tags = resp.json()["tags"]
+        assert isinstance(tags, list)
+        assert len(tags) >= 1
 
 
-# ── Screen 5: Panel Preview + Live Polling ────────────────────────────
+# -- Screen 5: Panel Preview + Live Polling --
 
 def test_screen5_plc_config_save():
-    """Save PLC configuration with wizard-shape payload."""
     payload = {
         "name": "Live Dashboard",
         "device_ip": "192.168.1.100",
@@ -120,35 +136,28 @@ def test_screen5_plc_config_save():
 
 
 def test_screen5_live_polling():
-    """After config, live endpoint returns tag data."""
-    # Ensure config is saved and poller started
-    client.post("/api/plc/config", json={
-        "name": "Live Dashboard",
-        "device_ip": "192.168.1.100",
-        "device_port": 502,
-        "protocol": "modbus",
-        "tags": [{"name": "motor_speed", "address": "HR101", "type": "register"}],
-    })
-    # Give poller time to produce first snapshot
-    time.sleep(1)
-
-    resp = client.post("/api/plc/live", json={
-        "ip": "192.168.1.100",
-        "port": 502,
-        "tags": ["motor_speed"],
-    })
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "data" in data
-    # data might be empty if sim hasn't ticked yet — that's acceptable
-    # but it must be a dict, not None
-    assert isinstance(data["data"], dict)
+    poller._latest = {
+        "motor_speed": 60,
+        "conveyor_running": True,
+        "timestamp": "2025-01-01T00:00:00Z",
+    }
+    try:
+        resp = client.post("/api/plc/live", json={
+            "ip": "192.168.1.100",
+            "port": 502,
+            "tags": ["motor_speed"],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "data" in data
+        assert isinstance(data["data"], dict)
+    finally:
+        poller._latest = None
 
 
-# ── Screen 6: WiFi Config + Finish ───────────────────────────────────
+# -- Screen 6: WiFi Config + Finish --
 
 def test_screen6_wifi_scan():
-    """WiFi scan returns networks or graceful 503."""
     resp = client.get("/api/wifi/scan")
     assert resp.status_code in [200, 503]
     if resp.status_code == 200:
@@ -156,7 +165,6 @@ def test_screen6_wifi_scan():
 
 
 def test_screen6_wifi_connect():
-    """WiFi connect returns success or graceful 503."""
     resp = client.post("/api/wifi/connect", json={
         "ssid": "TestNetwork",
         "password": "password123",
@@ -165,82 +173,68 @@ def test_screen6_wifi_connect():
 
 
 def test_screen6_final_status():
-    """Final status endpoint confirms gateway is healthy after wizard."""
     resp = client.get("/api/status")
     assert resp.status_code == 200
     data = resp.json()
     assert "gateway_id" in data
     assert data["gateway_id"].startswith("flm-")
-    assert data["mode"] == "sim"
-    assert "plc" in data
+    assert "mode" not in data
+    assert "running_on" in data
 
 
-# ── Full Flow Integration ─────────────────────────────────────────────
+# -- Full Flow Integration --
 
 def test_full_wizard_flow_sequential():
-    """Walk the entire wizard flow in order, verifying each step succeeds."""
-    # Screen 1: Get gateway ID
     r1 = client.get("/api/gateway/id")
     assert r1.status_code == 200
     gw_id = r1.json()["id"]
 
-    # Screen 2: Scan for PLCs
-    r2 = client.get("/api/plc/scan?subnet=192.168.1.0/24")
-    assert r2.status_code == 200
-    devices = r2.json()["devices"]
-    assert len(devices) >= 1
-    plc_ip = devices[0]["ip"]
-    plc_port = devices[0]["port"]
+    with patch("net.api.main.scan_subnet", new_callable=AsyncMock, return_value=_mock_scan()):
+        r2 = client.get("/api/plc/scan?subnet=192.168.1.0/24")
+        assert r2.status_code == 200
+        devices = r2.json()["devices"]
+        assert len(devices) >= 1
 
-    # Screen 3: Extract tags from discovered PLC
-    r3 = client.post("/api/plc/extract", json={"ip": plc_ip, "port": plc_port})
-    assert r3.status_code == 200
-    tags = r3.json()["tags"]
-    assert len(tags) > 0
+    with patch("net.api.main.extract_tags", new_callable=AsyncMock, return_value=_mock_extract_result()):
+        r3 = client.post("/api/plc/extract", json={"ip": "192.168.1.100", "port": 502})
+        assert r3.status_code == 200
+        tags = r3.json()["tags"]
+        assert len(tags) > 0
 
-    # Screen 4: Select tags (client-side; pick first 5)
-    selected = tags[:5]
+    selected = tags[:3]
 
-    # Screen 5: Save config and poll
     r5a = client.post("/api/plc/config", json={
         "name": "Live Dashboard",
-        "device_ip": plc_ip,
-        "device_port": plc_port,
+        "device_ip": "192.168.1.100",
+        "device_port": 502,
         "protocol": "modbus",
         "tags": selected,
     })
     assert r5a.status_code == 200
     assert r5a.json()["status"] == "configured"
 
-    time.sleep(0.5)
+    poller._latest = {"motor_speed": 60, "timestamp": "2025-01-01T00:00:00Z"}
+    try:
+        r5b = client.post("/api/plc/live", json={
+            "ip": "192.168.1.100",
+            "port": 502,
+            "tags": ["motor_speed"],
+        })
+        assert r5b.status_code == 200
+        assert "data" in r5b.json()
 
-    # Poll live data
-    tag_names = [t.get("name", t.get("tag", "")) for t in selected if t.get("name") or t.get("tag")]
-    r5b = client.post("/api/plc/live", json={
-        "ip": plc_ip,
-        "port": plc_port,
-        "tags": tag_names,
-    })
-    assert r5b.status_code == 200
-    assert "data" in r5b.json()
-
-    # Screen 6: WiFi + status
-    r6a = client.get("/api/wifi/scan")
-    assert r6a.status_code in [200, 503]
-
-    r6b = client.get("/api/status")
-    assert r6b.status_code == 200
-    status = r6b.json()
-    assert status["gateway_id"] == gw_id
-    assert status["plc"]["polling"] is True
+        r6b = client.get("/api/status")
+        assert r6b.status_code == 200
+        status = r6b.json()
+        assert status["gateway_id"] == gw_id
+    finally:
+        poller._latest = None
 
 
-# ── Wizard HTML Loads ─────────────────────────────────────────────────
+# -- Wizard HTML Loads --
 
 def test_wizard_html_loads():
-    """The wizard HTML page loads and contains Pi Factory branding."""
     resp = client.get("/setup")
     assert resp.status_code == 200
     assert "Pi Factory" in resp.text
-    # Verify key screen elements exist
     assert "screen-1" in resp.text or "Welcome" in resp.text

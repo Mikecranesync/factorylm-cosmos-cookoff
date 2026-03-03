@@ -319,6 +319,8 @@
         <span id="camDot" class="conn-dot"></span>
         <span class="conn-label">CC</span>
         <span id="ccDot" class="conn-dot"></span>
+        <span class="conn-label">Node</span>
+        <span id="nodeName" style="font-size:11px;color:#888;font-family:monospace;">—</span>
     </div>
 </div>
 
@@ -422,7 +424,7 @@
 </div>
 
 <!-- Footer -->
-<div class="footer">FactoryLM Cosmos Cookoff &mdash; Live I/O Panel v2.1</div>
+<div class="footer">FactoryLM Cosmos Cookoff &mdash; Live I/O Panel v3.0</div>
 
 <script>
 // ---- Tag configs ----
@@ -839,10 +841,11 @@ async function init() {
     try {
         const resp = await fetch('/api/status');
         const data = await resp.json();
-        if (data.plc && data.plc.polling) {
+        document.getElementById('nodeName').textContent = data.running_on || '—';
+        if (data.plc_connected) {
             plcConnected = true;
-            const ip = data.plc.ip || '192.168.1.100';
-            const port = data.plc.port || 502;
+            const ip = data.plc_host || '192.168.1.100';
+            const port = data.plc_port || 502;
             document.getElementById('plcIp').value = ip;
             document.getElementById('plcPort').value = port;
             collapseConnBar(ip, port);

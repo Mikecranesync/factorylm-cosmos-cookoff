@@ -4,7 +4,6 @@ import tempfile
 
 # Use a unique temp DB to avoid permission conflicts across sessions
 _test_db = os.path.join(tempfile.mkdtemp(), "factorylm_test.db")
-os.environ["FACTORYLM_NET_MODE"] = "sim"
 os.environ["FACTORYLM_NET_DB"] = _test_db
 
 import pytest

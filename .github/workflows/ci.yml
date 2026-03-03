@@ -35,14 +35,10 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
 
-      - name: Run tests (sim mode)
-        env:
-          FACTORYLM_NET_MODE: sim
+      - name: Run tests
         run: pytest tests/ -v --tb=short
 
       - name: Verify API endpoints respond
-        env:
-          FACTORYLM_NET_MODE: sim
         run: |
           python -m uvicorn net.api.main:app --host 127.0.0.1 --port 9000 &
           sleep 3
@@ -66,17 +62,9 @@ jobs:
           check "GET /setup" \
             "curl -sf http://127.0.0.1:9000/setup | grep -q 'Pi Factory'"
 
-          # Status (sim mode)
+          # Status (no mode field, has running_on)
           check "GET /api/status" \
-            "curl -sf http://127.0.0.1:9000/api/status | python -c \"import sys,json; d=json.load(sys.stdin); assert d['mode']=='sim'\""
-
-          # PLC scan (sim returns fake devices)
-          check "GET /api/plc/scan" \
-            "curl -sf http://127.0.0.1:9000/api/plc/scan | python -c \"import sys,json; d=json.load(sys.stdin); assert len(d['devices'])>0\""
-
-          # Tag extraction
-          check "POST /api/plc/extract" \
-            "curl -sf -X POST http://127.0.0.1:9000/api/plc/extract -H 'Content-Type: application/json' -d '{\"ip\":\"192.168.1.100\"}' | python -c \"import sys,json; d=json.load(sys.stdin); assert 'tags' in d\""
+            "curl -sf http://127.0.0.1:9000/api/status | python -c \"import sys,json; d=json.load(sys.stdin); assert 'running_on' in d; assert 'mode' not in d\""
 
           # WiFi scan — 200 (real Pi) or 503 (no WiFi hw) are both OK
           check "GET /api/wifi/scan" \

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from net.sim.plc_simulator import TagSnapshot
+from net.models.tags import TagSnapshot
 
 
 # ---------------------------------------------------------------------------

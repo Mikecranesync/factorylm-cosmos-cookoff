@@ -7,17 +7,28 @@ holding registers so the PLC can read them via MSG instruction.
 
 Also reads PLC command registers (100-103) and caches them for the API.
 
-Register map (published 0-9):
-  0  belt_rpm         x10
-  1  belt_speed_pct   x10
-  2  belt_status      enum 0-4
-  3  belt_offset_px   value + 32768 (signed → unsigned)
-  4  vfd_output_hz    x100
-  5  vfd_output_amps  x10
-  6  vfd_fault_code   direct
-  7  ai_fault_code    direct (from poller error_code)
-  8  ai_confidence    0-100 (placeholder)
-  9  pi_heartbeat     0-65535 wrapping
+Register map (published 0-20):
+   0  belt_rpm         x10
+   1  belt_speed_pct   x10
+   2  belt_status      enum 0-4
+   3  belt_offset_px   value + 32768 (signed → unsigned)
+   4  vfd_output_hz    x100
+   5  vfd_output_amps  x10
+   6  vfd_fault_code   direct
+   7  motor_running    0/1
+   8  motor_speed      0-100
+   9  motor_current    x10
+  10  conveyor_running 0/1
+  11  temperature      x10
+  12  pressure         direct
+  13  sensor_1         0/1
+  14  sensor_2         0/1
+  15  e_stop           0/1
+  16  fault_alarm      0/1
+  17  error_code       direct
+  18  ai_confidence    0-100
+  19  pi_heartbeat     0-65535 wrapping
+  20  source_flags     bitmask: bit0=plc, bit1=vfd, bit2=camera
 """
 from __future__ import annotations
 
@@ -145,15 +156,17 @@ class Publisher:
             self._stop.wait(publish_interval)
 
     def _aggregate(self) -> list[int]:
-        """Read all sources, scale to uint16, return 10-element list."""
+        """Read all sources, scale to uint16, return 21-element list."""
         # Belt tachometer
         belt_rpm = 0
         belt_speed_pct = 0
         belt_status = 0
         belt_offset_px = 32768  # zero offset encoded as midpoint
+        camera_connected = False
 
         tach = self._belt_tachometer
         if tach is not None:
+            camera_connected = True
             try:
                 belt_rpm = _clamp(int(round(tach.rpm * 10)))
                 belt_speed_pct = _clamp(int(round(tach.speed_pct * 10)))
@@ -166,13 +179,14 @@ class Publisher:
         vfd_output_hz = 0
         vfd_output_amps = 0
         vfd_fault_code = 0
+        vfd_connected = False
 
         reader = self._vfd_reader
         if reader is not None:
             try:
                 vfd_data = reader.tick()
                 if vfd_data.get("vfd_connected", False):
-                    # vfd_output_hz is already /100 scaled, we need raw x100
+                    vfd_connected = True
                     raw_hz = vfd_data.get("vfd_output_hz", 0)
                     vfd_output_hz = _clamp(int(round(raw_hz * 100)))
                     raw_amps = vfd_data.get("vfd_output_amps", 0)
@@ -181,12 +195,42 @@ class Publisher:
             except Exception as e:
                 logger.debug("VFD reader error: %s", e)
 
-        # AI fault code from poller
-        ai_fault_code = 0
+        # PLC tags from poller
+        motor_running = 0
+        motor_speed = 0
+        motor_current = 0
+        conveyor_running = 0
+        temperature = 0
+        pressure = 0
+        sensor_1 = 0
+        sensor_2 = 0
+        e_stop = 0
+        fault_alarm = 0
+        error_code = 0
         ai_confidence = 0
+        plc_connected = False
+
         tags = self._poller.latest
         if tags is not None:
-            ai_fault_code = _clamp(int(tags.get("error_code", 0)))
+            plc_connected = True
+            motor_running = _clamp(int(bool(tags.get("motor_running", False))))
+            motor_speed = _clamp(int(tags.get("motor_speed", 0)), 0, 100)
+            motor_current = _clamp(int(round(float(tags.get("motor_current", 0)) * 10)))
+            conveyor_running = _clamp(int(bool(tags.get("conveyor_running", False))))
+            temperature = _clamp(int(round(float(tags.get("temperature", 0)) * 10)))
+            pressure = _clamp(int(tags.get("pressure", 0)))
+            sensor_1 = _clamp(int(bool(tags.get("sensor_1", False))))
+            sensor_2 = _clamp(int(bool(tags.get("sensor_2", False))))
+            e_stop = _clamp(int(bool(tags.get("e_stop", False))))
+            fault_alarm = _clamp(int(bool(tags.get("fault_alarm", False))))
+            error_code = _clamp(int(tags.get("error_code", 0)))
+
+        # Source flags bitmask
+        source_flags = (
+            (int(plc_connected) << 0)
+            | (int(vfd_connected) << 1)
+            | (int(camera_connected) << 2)
+        )
 
         # Heartbeat
         self._heartbeat = (self._heartbeat + 1) % 65536
@@ -199,7 +243,18 @@ class Publisher:
             vfd_output_hz,      # reg 4
             vfd_output_amps,    # reg 5
             vfd_fault_code,     # reg 6
-            ai_fault_code,      # reg 7
-            ai_confidence,      # reg 8
-            self._heartbeat,    # reg 9
+            motor_running,      # reg 7
+            motor_speed,        # reg 8
+            motor_current,      # reg 9
+            conveyor_running,   # reg 10
+            temperature,        # reg 11
+            pressure,           # reg 12
+            sensor_1,           # reg 13
+            sensor_2,           # reg 14
+            e_stop,             # reg 15
+            fault_alarm,        # reg 16
+            error_code,         # reg 17
+            ai_confidence,      # reg 18
+            self._heartbeat,    # reg 19
+            source_flags,       # reg 20
         ]

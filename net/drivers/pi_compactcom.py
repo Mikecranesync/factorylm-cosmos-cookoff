@@ -2,17 +2,17 @@
 Pi CompactCom — Modbus TCP Server exposing processed data to the PLC.
 
 The Pi acts as a Modbus TCP server so the Micro 820 PLC can read
-belt RPM, AI diagnosis, VFD status, and a watchdog heartbeat using
-a standard MSG instruction — identical to reading an HMS CompactCom.
+belt RPM, AI diagnosis, VFD status, PLC tags, and a watchdog heartbeat
+using a standard MSG instruction — identical to reading an HMS CompactCom.
 
 Register map (holding registers):
-  Published 0-9   (Pi → PLC, PLC reads)
+  Published 0-20   (Pi → PLC, PLC reads)  — 21 registers
   Commands 100-103 (PLC → Pi, PLC writes)
 
 Usage:
     cc = PiCompactCom(port=5020)
     cc.start()
-    cc.update_published([305, 500, 1, 32768, 0, 0, 0, 0, 0, 42])
+    cc.update_published([0]*21)
     cmds = cc.read_commands()
     cc.stop()
 """
@@ -69,12 +69,12 @@ class PiCompactCom:
         return self._thread is not None and self._thread.is_alive()
 
     def update_published(self, values: list) -> None:
-        """Write 10 integers to holding registers 0-9 (thread-safe).
+        """Write 21 integers to holding registers 0-20 (thread-safe).
 
-        Raises ValueError if not exactly 10 values.
+        Raises ValueError if not exactly 21 values.
         """
-        if len(values) != 10:
-            raise ValueError(f"Expected 10 values, got {len(values)}")
+        if len(values) != 21:
+            raise ValueError(f"Expected 21 values, got {len(values)}")
         with self._lock:
             if self._context is not None:
                 self._context[0].setValues(3, 0, values)
@@ -93,11 +93,11 @@ class PiCompactCom:
         }
 
     def read_published(self) -> list:
-        """Read holding registers 0-9 for API/debug (thread-safe)."""
+        """Read holding registers 0-20 for API/debug (thread-safe)."""
         with self._lock:
             if self._context is None:
-                return [0] * 10
-            return list(self._context[0].getValues(3, 0, count=10))
+                return [0] * 21
+            return list(self._context[0].getValues(3, 0, count=21))
 
     def _run_server(self) -> None:
         """Entry point for the server daemon thread.

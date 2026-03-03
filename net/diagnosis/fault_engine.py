@@ -72,14 +72,8 @@ class FaultEngine:
                          'Emergency stop has been triggered'),
     }
     
-    def __init__(self, sim_mode: bool = False):
-        """
-        Initialize the Fault Engine.
-        
-        Args:
-            sim_mode: Enable simulation mode for testing
-        """
-        self.sim_mode = sim_mode
+    def __init__(self):
+        """Initialize the Fault Engine."""
         self.active_faults: Dict[str, FaultRecord] = {}
         self.fault_history: List[FaultRecord] = []
         self._fault_thresholds = {

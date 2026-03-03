@@ -2,7 +2,7 @@
 Pi Factory Net — Edge Gateway API
 
 FastAPI backend serving the setup wizard and PLC management endpoints.
-Reads FACTORYLM_NET_MODE env var: "real" (default) or "sim".
+Real hardware only — no simulation mode.
 
 Run:
     uvicorn net.api.main:app --host 0.0.0.0 --port 8000
@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager
@@ -61,7 +62,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("net.api")
 
-MODE = os.environ.get("FACTORYLM_NET_MODE", "real")
 DB_PATH = os.environ.get("FACTORYLM_NET_DB", "net.db")
 
 # Shared poller instance
@@ -277,7 +277,7 @@ def _save_tag_name(plc_id: str, modbus_path: str, human_name: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Pi Factory Net starting (mode=%s, db=%s)", MODE, DB_PATH)
+    logger.info("Pi Factory Net starting (db=%s)", DB_PATH)
     _init_db()
     gateway_id = _get_gateway_id()
     logger.info(f"Gateway ID: {gateway_id}")
@@ -340,7 +340,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Pi Factory Net",
-    version="2.1.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -404,27 +404,23 @@ async def setup_wizard():
 
 @app.get("/api/status")
 async def gateway_status():
-    """Gateway health check — PLC connection, WiFi, mode."""
-    active_plc = _get_active_plc()
-    plc_host = os.environ.get("PLC_HOST", "")
-    hardware_mode = bool(plc_host)
+    """Gateway health check — honest status, no fake data."""
+    plc_host = os.environ.get("PLC_HOST", "") or None
+    plc_port = int(os.environ.get("PLC_PORT", "502"))
+    vfd_host = os.environ.get("VFD_HOST", "") or None
 
     return {
         "gateway_id": _get_gateway_id(),
-        "mode": MODE,
-        "hardware_mode": hardware_mode,
-        "plc": {
-            "connected": poller.plc_connected,
-            "polling": poller.is_running,
-            "ip": plc_host or poller._plc_ip,
-            "port": int(os.environ.get("PLC_PORT", "502")) if plc_host else poller._plc_port,
-            "active_plc_id": active_plc["plc_id"] if active_plc else None,
-            "source": "ModbusTagSource" if plc_host else "template",
-        },
-        "wifi": {
-            "connected": True,  # TODO: real check on Pi
-        },
-        "latest_tags": poller.latest,
+        "version": "3.0.0",
+        "running_on": socket.gethostname(),
+        "plc_connected": poller.plc_connected if poller else False,
+        "plc_host": plc_host,
+        "plc_port": plc_port,
+        "vfd_connected": vfd_reader is not None and hasattr(vfd_reader, 'connected') and vfd_reader.connected if vfd_reader else False,
+        "vfd_host": vfd_host,
+        "camera_connected": belt_tachometer is not None,
+        "compactcom_running": compactcom_server.is_running if compactcom_server else False,
+        "latest_tags": poller.latest if poller else None,
     }
 
 
@@ -437,13 +433,9 @@ async def gateway_id():
 @app.get("/api/plc/scan")
 async def plc_scan(subnet: str = Query(default="192.168.1.0/24")):
     """Scan subnet for Modbus TCP devices."""
-    if MODE == "sim":
-        devices = fake_scan_result()
-    else:
-        devices = await scan_subnet(subnet)
+    devices = await scan_subnet(subnet)
 
     return {
-        "mode": MODE,
         "subnet": subnet,
         "devices": [
             {
@@ -465,24 +457,23 @@ async def plc_scan(subnet: str = Query(default="192.168.1.0/24")):
 async def plc_extract(req: PLCExtractRequest):
     """Run tag extractor on a PLC to discover tags automatically."""
     gateway_id = _get_gateway_id()
-    
+
     logger.info(f"Starting tag extraction for {req.ip}:{req.port}")
-    
+
     try:
         result = await extract_tags(
             gateway_id=gateway_id,
             plc_ip=req.ip,
-            sim_mode=(MODE == "sim"),
         )
-        
+
         if result is None:
             raise HTTPException(
                 status_code=502,
                 detail=f"Could not extract tags from {req.ip}:{req.port}"
             )
-        
+
         return result.to_dict()
-    
+
     except Exception as e:
         logger.error(f"Tag extraction failed: {e}")
         raise HTTPException(
@@ -498,20 +489,6 @@ async def plc_test(req: PLCTestRequest):
     if not template:
         raise HTTPException(status_code=400, detail=f"Unknown template: {req.template}")
 
-    if MODE == "sim":
-        from net.sim.plc_simulator import PLCSimulator
-        sim = PLCSimulator(node_id="test-probe", db_path=None)
-        sim._store_snapshot = lambda snap: None
-        snap = sim.tick()
-        return {
-            "mode": "sim",
-            "ip": req.ip,
-            "port": req.port,
-            "template": req.template,
-            "tags": snap.to_dict(),
-        }
-
-    # Real mode — synchronous Modbus read in thread pool
     from net.drivers.modbus_reader import ModbusReader
 
     def _read():
@@ -534,7 +511,6 @@ async def plc_test(req: PLCTestRequest):
         )
 
     return {
-        "mode": "real",
         "ip": req.ip,
         "port": req.port,
         "template": req.template,
@@ -587,15 +563,6 @@ async def plc_live_post(req: PLCLiveRequest):
     Response: {data: {tag_name: value, ...}}
     """
     all_tags = poller.latest
-
-    if all_tags is None:
-        # If poller isn't running yet, try to start it in sim mode
-        if MODE == "sim" and not poller.is_running:
-            poller.configure(ip=req.ip, port=req.port)
-            poller.start()
-            # Give it a beat to produce first snapshot
-            await asyncio.sleep(0.25)
-            all_tags = poller.latest
 
     if all_tags is None:
         return {"data": {}}
@@ -700,7 +667,6 @@ async def plc_config(body: dict):
         "status": "configured",
         "plc_id": plc_id,
         "polling": poller.is_running,
-        "mode": MODE,
     }
 
 
@@ -1037,9 +1003,20 @@ async def compactcom_registers():
         "vfd_output_hz": raw[4],
         "vfd_output_amps": raw[5],
         "vfd_fault_code": raw[6],
-        "ai_fault_code": raw[7],
-        "ai_confidence": raw[8],
-        "pi_heartbeat": raw[9],
+        "motor_running": raw[7],
+        "motor_speed": raw[8],
+        "motor_current": raw[9],
+        "conveyor_running": raw[10],
+        "temperature": raw[11],
+        "pressure": raw[12],
+        "sensor_1": raw[13],
+        "sensor_2": raw[14],
+        "e_stop": raw[15],
+        "fault_alarm": raw[16],
+        "error_code": raw[17],
+        "ai_confidence": raw[18],
+        "pi_heartbeat": raw[19],
+        "source_flags": raw[20],
     }
 
     cmds = compactcom_server.read_commands()

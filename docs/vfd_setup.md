@@ -74,7 +74,7 @@ export VFD_SLAVE=1               # Modbus slave ID (matches P14.02)
 Or in the startup command:
 
 ```bash
-VFD_HOST=192.168.1.101 VFD_SLAVE=1 python3 simulate.py --port 8081
+VFD_HOST=192.168.1.101 VFD_SLAVE=1 python3 server.py --port 8081
 ```
 
 ## Register Map

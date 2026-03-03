@@ -2,13 +2,12 @@
 EtherNet/IP protocol reader for industrial PLC tag discovery.
 
 Uses Rockwell Automation pycomm3 library for CIP tag upload and value reading.
-Provides graceful fallback for missing dependencies and simulation mode support.
+Provides graceful fallback for missing dependencies.
 """
 
 import asyncio
 import logging
 from typing import List, Optional, Any
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +51,12 @@ class EtherNetIPReader:
         """
         self.ip_address = ip_address
         self.timeout = timeout
-        self.sim_mode = os.getenv("FACTORYLM_NET_MODE") == "sim"
         self._driver = None
         self._pycomm3_available = self._check_pycomm3()
 
         logger.info(
             f"EtherNetIPReader initialized - {ip_address}, "
-            f"pycomm3: {self._pycomm3_available}, sim: {self.sim_mode}"
+            f"pycomm3: {self._pycomm3_available}"
         )
 
     @staticmethod
@@ -78,9 +76,6 @@ class EtherNetIPReader:
         Returns:
             List of Tag objects with names, addresses, types, and values.
         """
-        if self.sim_mode:
-            return self._get_simulated_tags()
-
         if not self._pycomm3_available:
             logger.warning(
                 "pycomm3 not installed, cannot perform real EtherNet/IP discovery. "
@@ -181,56 +176,6 @@ class EtherNetIPReader:
             )
             return []
 
-    def _get_simulated_tags(self) -> List[Tag]:
-        """
-        Return simulated tag data for testing.
-
-        Returns:
-            List of realistic fake tags.
-        """
-        return [
-            Tag(
-                name="Motor_Run",
-                plc_address="Motor_Run",
-                type_name="BOOL",
-                value=True,
-                named=True,
-                writable=False,
-            ),
-            Tag(
-                name="Motor_Speed",
-                plc_address="Motor_Speed",
-                type_name="INT",
-                value=1500,
-                named=True,
-                writable=True,
-            ),
-            Tag(
-                name="Motor_Error",
-                plc_address="Motor_Error",
-                type_name="DINT",
-                value=0,
-                named=True,
-                writable=False,
-            ),
-            Tag(
-                name="System_Temperature",
-                plc_address="System_Temperature",
-                type_name="REAL",
-                value=45.7,
-                named=True,
-                writable=False,
-            ),
-            Tag(
-                name="Production_Count",
-                plc_address="Production_Count",
-                type_name="LINT",
-                value=12547,
-                named=True,
-                writable=False,
-            ),
-        ]
-
     async def read_tag(self, tag_name: str) -> Optional[Any]:
         """
         Read a single tag value.
@@ -241,11 +186,6 @@ class EtherNetIPReader:
         Returns:
             Current tag value, or None if read fails.
         """
-        if self.sim_mode:
-            # Return simulated value
-            sim_tags = {tag.name: tag.value for tag in self._get_simulated_tags()}
-            return sim_tags.get(tag_name)
-
         if not self._pycomm3_available:
             return None
 
@@ -274,8 +214,6 @@ async def main():
     )
 
     reader = EtherNetIPReader("192.168.1.100", timeout=0.3)
-    reader.sim_mode = True  # Force simulation mode
-
     tags = await reader.discover_tags()
     for tag in tags:
         print(

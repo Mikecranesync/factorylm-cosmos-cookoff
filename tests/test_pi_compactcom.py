@@ -1,4 +1,4 @@
-"""Tests for PiCompactCom — Modbus TCP server driver."""
+"""Tests for PiCompactCom — Modbus TCP server driver (21 registers)."""
 from __future__ import annotations
 
 import pytest
@@ -7,9 +7,8 @@ from net.drivers.pi_compactcom import PiCompactCom
 
 
 def test_update_published_stores_values():
-    """Write 10 values, read them back via read_published()."""
+    """Write 21 values, read them back via read_published()."""
     cc = PiCompactCom(port=15024)
-    # Manually init the context without starting the server
     from pymodbus.datastore import (
         ModbusSequentialDataBlock,
         ModbusServerContext,
@@ -20,7 +19,7 @@ def test_update_published_stores_values():
     )
     cc._context = ModbusServerContext(slaves=store, single=True)
 
-    values = [305, 500, 2, 32768, 3000, 45, 0, 1, 85, 42]
+    values = [305, 500, 2, 32768, 3000, 45, 0, 1, 60, 30, 1, 250, 100, 0, 0, 0, 0, 0, 85, 42, 7]
     cc.update_published(values)
     result = cc.read_published()
     assert result == values
@@ -29,7 +28,7 @@ def test_update_published_stores_values():
 def test_update_published_wrong_length_raises():
     """ValueError on wrong count."""
     cc = PiCompactCom(port=15024)
-    with pytest.raises(ValueError, match="Expected 10"):
+    with pytest.raises(ValueError, match="Expected 21"):
         cc.update_published([1, 2, 3])
 
 
@@ -63,7 +62,6 @@ def test_read_commands_after_plc_write():
     )
     cc._context = ModbusServerContext(slaves=store, single=True)
 
-    # Simulate PLC writing to command registers
     cc._context[0].setValues(3, 100, [1, 500, 2, 1])
 
     cmds = cc.read_commands()
@@ -74,19 +72,16 @@ def test_read_commands_after_plc_write():
 
 
 def test_is_running_false_before_start():
-    """is_running is False when server hasn't been started."""
     cc = PiCompactCom(port=15024)
     assert cc.is_running is False
 
 
 def test_read_published_no_context():
-    """read_published returns zeros when context not initialized."""
     cc = PiCompactCom(port=15024)
-    assert cc.read_published() == [0] * 10
+    assert cc.read_published() == [0] * 21
 
 
 def test_read_commands_no_context():
-    """read_commands returns zero dict when context not initialized."""
     cc = PiCompactCom(port=15024)
     cmds = cc.read_commands()
     assert cmds == {"cmd_run": 0, "cmd_speed_pct": 0, "cmd_mode": 0, "cmd_reset_fault": 0}

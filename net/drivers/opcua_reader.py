@@ -2,13 +2,12 @@
 OPC UA protocol reader for industrial device tag discovery.
 
 Uses python-opcua library for recursive tree browsing and tag discovery.
-Provides graceful fallback for missing dependencies and simulation mode support.
+Provides graceful fallback for missing dependencies.
 """
 
 import asyncio
 import logging
-from typing import List, Optional, Any, Dict, Tuple
-import os
+from typing import List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +55,12 @@ class OpcUaReader:
         self.ip_address = ip_address
         self.timeout = timeout
         self.port = port
-        self.sim_mode = os.getenv("FACTORYLM_NET_MODE") == "sim"
         self._opcua_available = self._check_opcua()
         self.url = f"opc.tcp://{ip_address}:{port}"
 
         logger.info(
             f"OpcUaReader initialized - {self.url}, "
-            f"opcua: {self._opcua_available}, sim: {self.sim_mode}"
+            f"opcua: {self._opcua_available}"
         )
 
     @staticmethod
@@ -84,9 +82,6 @@ class OpcUaReader:
         Returns:
             List of Tag objects with names, types, units, and descriptions.
         """
-        if self.sim_mode:
-            return self._get_simulated_tags()
-
         if not self._opcua_available:
             logger.warning(
                 "opcua library not installed, cannot perform real OPC UA discovery. "
@@ -250,70 +245,6 @@ class OpcUaReader:
 
         return tags
 
-    def _get_simulated_tags(self) -> List[Tag]:
-        """
-        Return simulated OPC UA tag data for testing.
-
-        Returns:
-            List of realistic fake tags in OPC UA hierarchy.
-        """
-        return [
-            Tag(
-                name="Devices/PLC/Motor/Status",
-                plc_address="ns=2;s=Motor.Status",
-                type_name="Boolean",
-                value=True,
-                named=True,
-                writable=False,
-                description="Motor run status",
-            ),
-            Tag(
-                name="Devices/PLC/Motor/Speed",
-                plc_address="ns=2;s=Motor.Speed",
-                type_name="Int16",
-                value=1500,
-                named=True,
-                writable=True,
-                description="Motor speed in RPM",
-            ),
-            Tag(
-                name="Devices/PLC/Motor/Current",
-                plc_address="ns=2;s=Motor.Current",
-                type_name="Float",
-                value=25.3,
-                named=True,
-                writable=False,
-                description="Motor current in amps",
-            ),
-            Tag(
-                name="Devices/PLC/Temperature/Main",
-                plc_address="ns=2;s=Temp.Main",
-                type_name="Float",
-                value=45.7,
-                named=True,
-                writable=False,
-                description="Main system temperature",
-            ),
-            Tag(
-                name="Devices/PLC/Production/Counter",
-                plc_address="ns=2;s=Production.Count",
-                type_name="UInt32",
-                value=12547,
-                named=True,
-                writable=False,
-                description="Total items produced",
-            ),
-            Tag(
-                name="Devices/PLC/Production/AlarmState",
-                plc_address="ns=2;s=Alarms.Active",
-                type_name="Boolean",
-                value=False,
-                named=True,
-                writable=True,
-                description="Active alarm state",
-            ),
-        ]
-
     async def read_tag(self, tag_address: str) -> Optional[Any]:
         """
         Read a single tag value by OPC UA address.
@@ -324,13 +255,6 @@ class OpcUaReader:
         Returns:
             Current tag value, or None if read fails.
         """
-        if self.sim_mode:
-            # Return simulated value
-            sim_tags = {
-                tag.plc_address: tag.value for tag in self._get_simulated_tags()
-            }
-            return sim_tags.get(tag_address)
-
         if not self._opcua_available:
             return None
 
@@ -362,8 +286,6 @@ async def main():
     )
 
     reader = OpcUaReader("192.168.1.100", timeout=0.3)
-    reader.sim_mode = True  # Force simulation mode
-
     tags = await reader.discover_tags()
     for tag in tags:
         print(

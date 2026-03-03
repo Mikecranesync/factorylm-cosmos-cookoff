@@ -1,7 +1,5 @@
-"""Test PLC discovery (sim mode)."""
-import asyncio
-import os
-os.environ["FACTORYLM_NET_MODE"] = "sim"
+"""Test PLC discovery — fake_scan_result utility function."""
+
 
 def test_finds_plc_on_known_subnet():
     from net.drivers.discovery import fake_scan_result

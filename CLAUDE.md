@@ -97,7 +97,7 @@ factorylm-cosmos-cookoff/
 ├── cosmos/               # Cosmos R2 client and agent
 ├── diagnosis/            # Fault classifier (8 codes) + prompt templates
 ├── services/             # Matrix API dashboard + PLC Modbus driver
-├── sim/                  # Factory I/O bridge + PLC simulator
+├── sim/                  # Factory I/O bridge (plc_simulator removed in v3.0)
 ├── config/               # YAML configs (factoryio.yaml)
 ├── docs/                 # Architecture + CONVEYOR_OF_DESTINY.md
 │   ├── CONVEYOR_OF_DESTINY.md    # THE PLAYBOOK — single source of truth
@@ -153,8 +153,11 @@ If you encounter a naming conflict, check `CONVEYOR_OF_DESTINY.md` Section 6 tab
 ## Quick Commands
 
 ```bash
-# Run diagnosis (simulator mode, no hardware)
-python cookoff/test_session.py
+# Start edge gateway (dev machine, no hardware)
+python server.py --port 8081
+
+# Start edge gateway with PLC + VFD + camera + CompactCom
+PLC_HOST=192.168.1.100 VFD_HOST=192.168.1.101 VIDEO_SOURCE=0 PI_COMPACTCOM_PORT=5020 python server.py --port 8081
 
 # Run diagnosis (live PLC)
 python cookoff/diagnosis_engine.py --live-plc --plc-ip 192.168.1.100

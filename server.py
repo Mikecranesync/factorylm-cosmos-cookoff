@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-FactoryLM Simulator — main entry point.
+FactoryLM Pi Factory — main entry point.
 
 Starts the FastAPI edge gateway with optional belt tachometer support.
 If VIDEO_SOURCE is set (e.g. VIDEO_SOURCE=0 for webcam), the belt
 tachometer is activated and belt endpoints become available.
-Without a camera, the system runs in V1 mode — all existing endpoints
-work exactly as before.
 
 Usage:
-    python simulate.py --port 8081
-    VIDEO_SOURCE=0 python simulate.py --port 8081
+    python server.py --port 8081
+    VIDEO_SOURCE=0 python server.py --port 8081
 """
 from __future__ import annotations
 
 import argparse
-import asyncio
 import logging
 import os
+import socket
 import threading
 import time
 
@@ -28,7 +26,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("simulate")
+logger = logging.getLogger("server")
 
 
 def _start_belt_tachometer(video_source: str | int) -> None:
@@ -96,7 +94,7 @@ def _start_belt_tachometer(video_source: str | int) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FactoryLM Simulator")
+    parser = argparse.ArgumentParser(description="FactoryLM Pi Factory Server")
     parser.add_argument("--port", type=int, default=8081, help="API port (default: 8081)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Bind address")
     args = parser.parse_args()
@@ -104,18 +102,32 @@ def main():
     video_source = os.environ.get("VIDEO_SOURCE")
     plc_host = os.environ.get("PLC_HOST", "")
     plc_port = os.environ.get("PLC_PORT", "502")
+    vfd_host = os.environ.get("VFD_HOST", "")
     cc_port = os.environ.get("PI_COMPACTCOM_PORT", "")
+    hostname = socket.gethostname()
 
-    # Banner
-    if plc_host:
-        logger.info(
-            "Mode: REAL PLC (Modbus TCP %s:%s)", plc_host, plc_port
+    # Hostname warning
+    if hostname != "pi-factory":
+        logger.warning(
+            "Running on '%s' not 'pi-factory'. "
+            "This is a dev machine. Real hardware may "
+            "not be reachable.",
+            hostname,
         )
+
+    # Per-device status
+    if plc_host:
+        logger.info("PLC: %s:%s", plc_host, plc_port)
     else:
-        logger.info("Mode: SIMULATOR (no PLC_HOST set)")
+        logger.warning("PLC: not configured (PLC_HOST not set)")
+
+    if vfd_host:
+        logger.info("VFD: %s", vfd_host)
+    else:
+        logger.warning("VFD: not configured (VFD_HOST not set)")
 
     if cc_port:
-        logger.info("PI_COMPACTCOM_PORT=%s — CompactCom server will start", cc_port)
+        logger.info("CompactCom: port %s", cc_port)
 
     if video_source is not None:
         logger.info("VIDEO_SOURCE=%s — starting belt tachometer", video_source)

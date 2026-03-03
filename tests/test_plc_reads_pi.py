@@ -2,7 +2,7 @@
 
 These tests start a real PiCompactCom server on a high test port and use
 a pymodbus ModbusTcpClient to simulate the Micro820 PLC MSG instruction.
-No actual PLC hardware needed.
+No actual PLC hardware needed. Updated for 21-register map.
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ def compactcom():
     """Start a real PiCompactCom server for the test module."""
     cc = PiCompactCom(port=TEST_PORT, host="127.0.0.1")
     cc.start()
-    # Give the async server time to bind
     time.sleep(1.0)
     yield cc
     cc.stop()
@@ -31,7 +30,6 @@ def compactcom():
 def plc_client(compactcom):
     """Create a Modbus TCP client simulating the PLC, with retry."""
     client = ModbusTcpClient("127.0.0.1", port=TEST_PORT, timeout=3)
-    # Retry connection a few times (server may still be binding)
     for attempt in range(5):
         if client.connect():
             break
@@ -42,13 +40,21 @@ def plc_client(compactcom):
     client.close()
 
 
+def _make_21_values(overrides=None):
+    """Build 21-element list with zeros, optionally overriding specific indices."""
+    values = [0] * 21
+    values[3] = 32768  # zero offset default
+    if overrides:
+        for idx, val in overrides.items():
+            values[idx] = val
+    return values
+
+
 # ------------------------------------------------------------------
 # Tests
 # ------------------------------------------------------------------
 
-
 def test_pi_server_accepts_plc_connection(compactcom):
-    """Start PiCompactCom, connect with ModbusTcpClient, verify success."""
     assert compactcom.is_running
     client = ModbusTcpClient("127.0.0.1", port=TEST_PORT, timeout=3)
     for attempt in range(5):
@@ -61,19 +67,21 @@ def test_pi_server_accepts_plc_connection(compactcom):
 
 
 def test_pi_serves_function_code_3(plc_client, compactcom):
-    """FC3 (Read Holding Registers) returns 10 registers — what Micro820 MSG uses."""
-    compactcom.update_published([100, 200, 2, 32768, 5000, 45, 0, 3, 80, 42])
+    """FC3 (Read Holding Registers) returns 21 registers."""
+    values = [100, 200, 2, 32768, 5000, 45, 0, 1, 60, 30, 1, 250, 100, 1, 0, 0, 0, 0, 85, 42, 7]
+    compactcom.update_published(values)
     time.sleep(0.05)
 
-    result = plc_client.read_holding_registers(0, count=10)
+    result = plc_client.read_holding_registers(0, count=21)
     assert not result.isError(), f"FC3 read failed: {result}"
-    assert len(result.registers) == 10
+    assert len(result.registers) == 21
     assert result.registers[0] == 100
-    assert result.registers[9] == 42
+    assert result.registers[19] == 42   # heartbeat
+    assert result.registers[20] == 7    # source_flags
 
 
 def test_pi_serves_function_code_16(plc_client, compactcom):
-    """FC16 (Write Multiple Registers) stores values — Micro820 MSG write."""
+    """FC16 (Write Multiple Registers) stores values."""
     result = plc_client.write_registers(100, [1, 600, 1, 0])
     assert not result.isError(), f"FC16 write failed: {result}"
 
@@ -82,13 +90,13 @@ def test_pi_serves_function_code_16(plc_client, compactcom):
     assert cmds["cmd_speed_pct"] == 600
     assert cmds["cmd_mode"] == 1
 
-    # Clean up
     plc_client.write_registers(100, [0, 0, 0, 0])
 
 
 def test_plc_read_belt_rpm_scaling(plc_client, compactcom):
-    """belt_rpm=47.5 -> register 0 = 475 (x10 scaling). Roundtrip decode."""
-    compactcom.update_published([475, 0, 0, 32768, 0, 0, 0, 0, 0, 0])
+    """belt_rpm=47.5 -> register 0 = 475 (x10 scaling)."""
+    values = _make_21_values({0: 475})
+    compactcom.update_published(values)
     time.sleep(0.05)
 
     result = plc_client.read_holding_registers(0, count=1)
@@ -100,9 +108,9 @@ def test_plc_read_belt_rpm_scaling(plc_client, compactcom):
 
 def test_plc_read_belt_status_enum(plc_client, compactcom):
     """Verify belt status enum values in register 2."""
-    # CALIBRATING=0, STOPPED=1, NORMAL=2, SLOW=3, MISTRACK=4
     for enum_val in range(5):
-        compactcom.update_published([0, 0, enum_val, 32768, 0, 0, 0, 0, 0, 0])
+        values = _make_21_values({2: enum_val})
+        compactcom.update_published(values)
         time.sleep(0.05)
         result = plc_client.read_holding_registers(2, count=1)
         assert not result.isError()
@@ -110,46 +118,40 @@ def test_plc_read_belt_status_enum(plc_client, compactcom):
 
 
 def test_plc_read_heartbeat_liveness(plc_client, compactcom):
-    """Read register 9 three times — value must increment each time."""
-    values = []
+    """Read register 19 three times — value must increment each time."""
+    readings = []
     for i in range(3):
-        compactcom.update_published([0, 0, 0, 32768, 0, 0, 0, 0, 0, i + 1])
+        values = _make_21_values({19: i + 1})
+        compactcom.update_published(values)
         time.sleep(0.05)
-        result = plc_client.read_holding_registers(9, count=1)
+        result = plc_client.read_holding_registers(19, count=1)
         assert not result.isError()
-        values.append(result.registers[0])
+        readings.append(result.registers[0])
 
-    assert values[0] < values[1] < values[2], f"Heartbeat not incrementing: {values}"
+    assert readings[0] < readings[1] < readings[2], f"Heartbeat not incrementing: {readings}"
 
 
 def test_plc_write_cmd_run(plc_client, compactcom):
-    """Write 1 to register 100 (cmd_run), read back via read_commands()."""
     plc_client.write_registers(100, [1, 0, 0, 0])
     time.sleep(0.05)
     cmds = compactcom.read_commands()
     assert cmds["cmd_run"] == 1
-
     plc_client.write_registers(100, [0, 0, 0, 0])
 
 
 def test_plc_write_cmd_speed(plc_client, compactcom):
-    """Write 600 to register 101 (cmd_speed_pct x10 = 60.0%)."""
     plc_client.write_registers(100, [0, 600, 0, 0])
     time.sleep(0.05)
     cmds = compactcom.read_commands()
     assert cmds["cmd_speed_pct"] == 600
-    assert cmds["cmd_speed_pct"] / 10.0 == 60.0
-
     plc_client.write_registers(100, [0, 0, 0, 0])
 
 
 def test_plc_write_cmd_reset_fault(plc_client, compactcom):
-    """Write 1 to register 103, verify latch, write 0, verify clear."""
     plc_client.write_registers(100, [0, 0, 0, 1])
     time.sleep(0.05)
     cmds = compactcom.read_commands()
     assert cmds["cmd_reset_fault"] == 1
-
     plc_client.write_registers(100, [0, 0, 0, 0])
     time.sleep(0.05)
     cmds = compactcom.read_commands()
@@ -157,10 +159,11 @@ def test_plc_write_cmd_reset_fault(plc_client, compactcom):
 
 
 def test_signed_offset_encoding(plc_client, compactcom):
-    """belt_offset_px = -50 -> register 3 = 32718. Roundtrip decode."""
+    """belt_offset_px = -50 -> register 3 = 32718."""
     offset = -50
-    encoded = offset + 32768  # 32718
-    compactcom.update_published([0, 0, 0, encoded, 0, 0, 0, 0, 0, 0])
+    encoded = offset + 32768
+    values = _make_21_values({3: encoded})
+    compactcom.update_published(values)
     time.sleep(0.05)
 
     result = plc_client.read_holding_registers(3, count=1)
@@ -169,8 +172,22 @@ def test_signed_offset_encoding(plc_client, compactcom):
     assert raw == 32718
     assert raw - 32768 == -50
 
-    # Positive offset
-    compactcom.update_published([0, 0, 0, 120 + 32768, 0, 0, 0, 0, 0, 0])
+    values2 = _make_21_values({3: 120 + 32768})
+    compactcom.update_published(values2)
     time.sleep(0.05)
     result = plc_client.read_holding_registers(3, count=1)
     assert result.registers[0] - 32768 == 120
+
+
+def test_plc_reads_source_flags(plc_client, compactcom):
+    """Register 20 = source_flags bitmask."""
+    values = _make_21_values({20: 5})  # plc + camera
+    compactcom.update_published(values)
+    time.sleep(0.05)
+
+    result = plc_client.read_holding_registers(20, count=1)
+    assert not result.isError()
+    flags = result.registers[0]
+    assert flags & 0x01  # plc
+    assert not (flags & 0x02)  # no vfd
+    assert flags & 0x04  # camera

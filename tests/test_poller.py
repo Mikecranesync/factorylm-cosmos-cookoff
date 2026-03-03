@@ -1,11 +1,9 @@
-"""Tests for the background Poller service."""
+"""Tests for the background Poller service — mocks, no sim mode."""
 
 import os
 import tempfile
 import time
-
-os.environ["FACTORYLM_NET_MODE"] = "sim"
-os.environ["FACTORYLM_NET_DB"] = os.path.join(tempfile.mkdtemp(), "poller_test.db")
+from unittest.mock import patch, MagicMock
 
 from net.services.poller import Poller
 
@@ -18,42 +16,67 @@ def _make_poller():
 
 def test_poller_init_creates_tables():
     p = _make_poller()
-    # Should not raise — tables created during __init__
     assert p.latest is None
     assert p.is_running is False
     assert p.plc_connected is False
 
 
-def test_poller_configure_and_start():
+def test_poller_with_mocked_tag_source():
+    """Mock ModbusTagSource so poller produces data without hardware."""
     p = _make_poller()
-    p.configure(ip="192.168.1.100", port=502)
-    p.start()
-    time.sleep(1)
-    assert p.is_running
-    assert p.latest is not None  # sim should produce data
-    p.stop()
-    assert not p.is_running
+
+    mock_snap = MagicMock()
+    mock_snap.to_dict.return_value = {
+        "timestamp": "2025-01-01T00:00:00Z",
+        "node_id": "plc-mock",
+        "motor_running": True,
+        "motor_speed": 60,
+        "motor_current": 3.0,
+        "temperature": 25.0,
+        "pressure": 100,
+        "conveyor_running": True,
+        "conveyor_speed": 60,
+        "sensor_1": False,
+        "sensor_2": False,
+        "fault_alarm": False,
+        "e_stop": False,
+        "error_code": 0,
+        "error_message": "No error",
+    }
+
+    mock_source = MagicMock()
+    mock_source.connected = True
+    mock_source.connect.return_value = True
+    mock_source.tick.return_value = mock_snap
+
+    with patch.dict(os.environ, {"PLC_HOST": "192.168.1.100", "PLC_PORT": "502"}):
+        with patch("net.drivers.modbus_tag_source.ModbusTagSource", return_value=mock_source):
+            p.start()
+            time.sleep(1)
+            assert p.is_running
+            assert p.latest is not None
+            assert p.latest["motor_speed"] == 60
+            p.stop()
+            assert not p.is_running
 
 
-def test_poller_latest_has_tags():
+def test_poller_no_plc_host_returns_none():
+    """Without PLC_HOST, poller should idle — latest stays None."""
     p = _make_poller()
-    p.configure(ip="192.168.1.100")
-    p.start()
-    time.sleep(1)
-    tags = p.latest
-    assert isinstance(tags, dict)
-    # Sim should produce some tag keys
-    assert len(tags) > 0
-    p.stop()
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("PLC_HOST", None)
+        p.start()
+        time.sleep(0.5)
+        assert p.latest is None
+        p.stop()
 
 
 def test_poller_writes_history():
     import sqlite3
     p = _make_poller()
-    p.configure(ip="192.168.1.100")
-    p.start()
-    time.sleep(2)  # Give enough for 1Hz write
-    p.stop()
+    # Manually inject data
+    p._latest = {"timestamp": "2025-01-01T00:00:00Z", "motor_speed": 60}
+    p._write_history(p._latest)
     conn = sqlite3.connect(p.db_path)
     rows = conn.execute("SELECT COUNT(*) FROM tag_history").fetchone()[0]
     conn.close()
@@ -93,7 +116,6 @@ def test_poller_tag_names():
 
 def test_poller_double_start_is_safe():
     p = _make_poller()
-    p.configure(ip="192.168.1.100")
     p.start()
     p.start()  # Should warn but not crash
     assert p.is_running
