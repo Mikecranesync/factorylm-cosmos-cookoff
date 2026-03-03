@@ -74,7 +74,16 @@ cosmos_client = CosmosClient()
 belt_tachometer = None  # Set by simulate.py or external caller
 belt_reasoner = BeltVideoReasoner()
 
+# VFD reader (initialized during lifespan if VFD_HOST configured)
+vfd_reader = None
+
+# CompactCom server + publisher + command handler (when PI_COMPACTCOM_PORT is set)
+compactcom_server = None    # PiCompactCom
+compactcom_publisher = None  # Publisher
+compactcom_cmd_handler = None  # PLCCommandHandler
+
 WIZARD_PATH = Path(__file__).parent.parent / "portal" / "wizard.html"
+PANEL_PATH = Path(__file__).parent.parent / "portal" / "panel.html"
 
 
 # ---------------------------------------------------------------------------
@@ -272,14 +281,66 @@ async def lifespan(app: FastAPI):
     _init_db()
     gateway_id = _get_gateway_id()
     logger.info(f"Gateway ID: {gateway_id}")
+
+    # Auto-start poller when PLC_HOST is set (real PLC mode)
+    plc_host = os.environ.get("PLC_HOST", "")
+    if plc_host:
+        plc_port = int(os.environ.get("PLC_PORT", "502"))
+        logger.info("PLC_HOST=%s:%d — auto-starting poller", plc_host, plc_port)
+        poller.configure(ip=plc_host, port=plc_port)
+        poller.start()
+
+    # Auto-start VFD reader when VFD_HOST is set
+    global vfd_reader
+    vfd_host = os.environ.get("VFD_HOST", "")
+    if vfd_host:
+        vfd_port = int(os.environ.get("VFD_PORT", "502"))
+        vfd_slave = int(os.environ.get("VFD_SLAVE", "1"))
+        from net.drivers.vfd_reader import VfdReader
+        vfd_reader = VfdReader(host=vfd_host, port=vfd_port, slave=vfd_slave)
+        if vfd_reader.connect():
+            logger.info("VFD connected: %s:%d slave=%d", vfd_host, vfd_port, vfd_slave)
+        else:
+            logger.warning("VFD connection failed — running without VFD")
+            vfd_reader = None
+
+    # Auto-start CompactCom server when PI_COMPACTCOM_PORT is set
+    global compactcom_server, compactcom_publisher, compactcom_cmd_handler
+    cc_port_str = os.environ.get("PI_COMPACTCOM_PORT", "")
+    if cc_port_str:
+        from net.drivers.pi_compactcom import PiCompactCom
+        from net.services.publisher import Publisher
+        from net.services.plc_command_handler import PLCCommandHandler
+        compactcom_server = PiCompactCom(port=int(cc_port_str))
+        compactcom_server.start()
+        compactcom_publisher = Publisher(
+            compactcom=compactcom_server,
+            poller=poller,
+            belt_tachometer=belt_tachometer,
+            vfd_reader=vfd_reader,
+        )
+        compactcom_publisher.start()
+        compactcom_cmd_handler = PLCCommandHandler(
+            compactcom=compactcom_server,
+            publisher=compactcom_publisher,
+        )
+        compactcom_cmd_handler.start()
+        logger.info("CompactCom server + publisher + command handler started on port %s", cc_port_str)
+
     yield
+    if compactcom_cmd_handler:
+        compactcom_cmd_handler.stop()
+    if compactcom_publisher:
+        compactcom_publisher.stop()
+    if compactcom_server:
+        compactcom_server.stop()
     poller.stop()
     logger.info("Pi Factory Net stopped")
 
 
 app = FastAPI(
     title="Pi Factory Net",
-    version="1.1.2",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -319,8 +380,18 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
 
 @app.get("/")
 async def root():
-    """Redirect to /setup."""
+    """Serve the Live I/O Panel if available, otherwise redirect to wizard."""
+    if PANEL_PATH.exists():
+        return HTMLResponse(PANEL_PATH.read_text())
     return RedirectResponse(url="/setup", status_code=302)
+
+
+@app.get("/panel", response_class=HTMLResponse)
+async def live_panel():
+    """Serve the Live I/O Panel."""
+    if PANEL_PATH.exists():
+        return HTMLResponse(PANEL_PATH.read_text())
+    return HTMLResponse("<h1>panel.html not found</h1>", status_code=500)
 
 
 @app.get("/setup", response_class=HTMLResponse)
@@ -335,16 +406,20 @@ async def setup_wizard():
 async def gateway_status():
     """Gateway health check — PLC connection, WiFi, mode."""
     active_plc = _get_active_plc()
-    
+    plc_host = os.environ.get("PLC_HOST", "")
+    hardware_mode = bool(plc_host)
+
     return {
         "gateway_id": _get_gateway_id(),
         "mode": MODE,
+        "hardware_mode": hardware_mode,
         "plc": {
             "connected": poller.plc_connected,
             "polling": poller.is_running,
-            "ip": poller._plc_ip,
-            "port": poller._plc_port,
+            "ip": plc_host or poller._plc_ip,
+            "port": int(os.environ.get("PLC_PORT", "502")) if plc_host else poller._plc_port,
             "active_plc_id": active_plc["plc_id"] if active_plc else None,
+            "source": "ModbusTagSource" if plc_host else "template",
         },
         "wifi": {
             "connected": True,  # TODO: real check on Pi
@@ -879,3 +954,112 @@ async def belt_stream():
         generate(),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
+
+
+# ---------------------------------------------------------------------------
+# VFD endpoints (V2)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/vfd/status")
+async def vfd_status():
+    """Return current VFD register values, or 'not configured' message."""
+    if vfd_reader is None:
+        return {"vfd_connected": False, "message": "VFD not configured (set VFD_HOST)"}
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(None, vfd_reader.tick)
+    return data
+
+
+@app.get("/api/conflicts")
+async def conflicts():
+    """Cross-reference PLC + VFD + belt vision for conflict detection."""
+    from net.diagnosis.vfd_conflicts import detect_conflicts
+
+    plc_tags = poller.latest or {}
+
+    vfd_tags = None
+    if vfd_reader:
+        loop = asyncio.get_event_loop()
+        vfd_tags = await loop.run_in_executor(None, vfd_reader.tick)
+
+    belt = None
+    if belt_tachometer:
+        belt = {
+            "belt_rpm": belt_tachometer.rpm,
+            "belt_speed_pct": belt_tachometer.speed_pct,
+            "belt_status": belt_tachometer.status.value,
+        }
+
+    result = detect_conflicts(plc_tags, vfd_tags, belt)
+    return {
+        "conflicts": [
+            {
+                "code": c.code,
+                "severity": c.severity,
+                "title": c.title,
+                "description": c.description,
+            }
+            for c in result
+        ],
+        "vfd_connected": vfd_tags is not None and vfd_tags.get("vfd_connected", False),
+    }
+
+
+# ---------------------------------------------------------------------------
+# CompactCom endpoints (V2)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/compactcom/status")
+async def compactcom_status():
+    """Return CompactCom server and publisher status."""
+    cc_port = os.environ.get("PI_COMPACTCOM_PORT", "")
+    return {
+        "enabled": bool(cc_port),
+        "port": int(cc_port) if cc_port else None,
+        "server_running": compactcom_server.is_running if compactcom_server else False,
+        "publisher_running": compactcom_publisher.is_running if compactcom_publisher else False,
+        "commands": compactcom_publisher.commands if compactcom_publisher else None,
+    }
+
+
+@app.get("/api/compactcom/registers")
+async def compactcom_registers():
+    """Return named CompactCom register values for debug/dashboard."""
+    if compactcom_server is None:
+        return {"published": None, "commands": None}
+
+    raw = compactcom_server.read_published()
+    published = {
+        "belt_rpm": raw[0],
+        "belt_speed_pct": raw[1],
+        "belt_status": raw[2],
+        "belt_offset_px": raw[3],
+        "vfd_output_hz": raw[4],
+        "vfd_output_amps": raw[5],
+        "vfd_fault_code": raw[6],
+        "ai_fault_code": raw[7],
+        "ai_confidence": raw[8],
+        "pi_heartbeat": raw[9],
+    }
+
+    cmds = compactcom_server.read_commands()
+    return {"published": published, "commands": cmds}
+
+
+@app.get("/api/compactcom/commands")
+async def compactcom_commands():
+    """Return PLC command history and current decoded state."""
+    if compactcom_cmd_handler is None:
+        return {
+            "commands_received": [],
+            "current_state": {
+                "cmd_run": 0,
+                "cmd_speed_pct": 0.0,
+                "cmd_mode": "manual",
+                "cmd_reset_fault": 0,
+            },
+        }
+    return {
+        "commands_received": compactcom_cmd_handler.history,
+        "current_state": compactcom_cmd_handler.current_state,
+    }

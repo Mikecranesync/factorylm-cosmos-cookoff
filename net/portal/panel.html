@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FactoryLM Live Panel</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        background: #0a0a0f;
+        color: #e0e0e0;
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 13px;
+        min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        background: #12121a;
+        border-bottom: 1px solid #1e1e2e;
+    }
+    .header h1 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #00ff88;
+    }
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .conn-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #555;
+        display: inline-block;
+    }
+    .conn-dot.ok { background: #00ff88; }
+    .conn-dot.err { background: #ff4444; }
+    .conn-label { font-size: 11px; color: #888; }
+
+    /* Connection bar */
+    .conn-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: #0e0e16;
+        border-bottom: 1px solid #1e1e2e;
+    }
+    .conn-bar.collapsed {
+        padding: 6px 20px;
+    }
+    .conn-bar.collapsed .conn-inputs { display: none; }
+    .conn-bar input {
+        background: #1a1a2e;
+        border: 1px solid #2a2a3e;
+        color: #e0e0e0;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        width: 160px;
+    }
+    .conn-bar input:focus { outline: none; border-color: #00ff88; }
+    .conn-bar label { font-size: 11px; color: #888; margin-right: 2px; }
+    .btn {
+        background: #00ff88;
+        color: #0a0a0f;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    .btn:hover { background: #00cc6a; }
+    .btn-outline {
+        background: transparent;
+        color: #00ff88;
+        border: 1px solid #00ff88;
+    }
+    .btn-outline:hover { background: #00ff8815; }
+    .conn-status-line {
+        font-size: 11px;
+        color: #888;
+    }
+    .conn-status-line .ip { color: #00ff88; }
+
+    /* Main grid */
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        padding: 16px 20px;
+    }
+    @media (max-width: 900px) {
+        .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Camera panel */
+    .camera-panel {
+        background: #12121a;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #1e1e2e;
+    }
+    .camera-panel img {
+        width: 100%;
+        display: block;
+        min-height: 280px;
+        background: #1a1a2e;
+        object-fit: contain;
+    }
+    .camera-fallback {
+        width: 100%;
+        min-height: 280px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #1a1a2e;
+        color: #555;
+        font-size: 14px;
+    }
+
+    /* Right panel */
+    .right-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .info-card {
+        background: #12121a;
+        border-radius: 8px;
+        padding: 14px;
+        border: 1px solid #1e1e2e;
+    }
+    .info-card h3 {
+        font-size: 12px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+    }
+    .belt-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .belt-stat {
+        text-align: center;
+    }
+    .belt-stat .value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #00ff88;
+    }
+    .belt-stat .label {
+        font-size: 10px;
+        color: #666;
+        text-transform: uppercase;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .status-badge.normal { background: #00ff8820; color: #00ff88; }
+    .status-badge.warning { background: #ffaa0020; color: #ffaa00; }
+    .status-badge.critical { background: #ff444420; color: #ff4444; }
+    .status-badge.stopped { background: #55555530; color: #888; }
+    .status-badge.unknown { background: #55555530; color: #888; }
+
+    /* AI diagnosis */
+    .ai-section { margin-top: 8px; }
+    .ai-result {
+        margin-top: 8px;
+        padding: 10px;
+        background: #0a0a0f;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.5;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+
+    /* Tag grids */
+    .tag-section {
+        padding: 0 20px 16px;
+    }
+    .section-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        margin-top: 4px;
+    }
+    .section-divider .label {
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+    .section-divider .line {
+        flex: 1;
+        height: 1px;
+        background: #1e1e2e;
+    }
+    .tag-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 8px;
+    }
+    .tag-card {
+        background: #12121a;
+        border: 1px solid #1e1e2e;
+        border-radius: 6px;
+        padding: 10px;
+        text-align: center;
+    }
+    .tag-card .tag-label {
+        font-size: 10px;
+        color: #666;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .tag-card .tag-value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #e0e0e0;
+    }
+    .tag-card .tag-value.on { color: #00ff88; }
+    .tag-card .tag-value.off { color: #555; }
+    .tag-card .tag-value.warn { color: #ffaa00; }
+    .tag-card .tag-value.crit { color: #ff4444; }
+
+    .tag-card-wide {
+        grid-column: 1 / -1;
+        background: #12121a;
+        border: 1px solid #1e1e2e;
+        border-radius: 6px;
+        padding: 10px;
+        text-align: center;
+        color: #555;
+        font-size: 12px;
+    }
+
+    /* Conflicts bar */
+    .conflicts-bar {
+        padding: 0 20px 16px;
+    }
+    .conflict-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-radius: 6px;
+        font-size: 12px;
+    }
+    .conflict-item.critical {
+        background: #ff444415;
+        border: 1px solid #ff444440;
+    }
+    .conflict-item.warning {
+        background: #ffaa0015;
+        border: 1px solid #ffaa0040;
+    }
+    .conflict-code {
+        font-weight: 700;
+        min-width: 40px;
+    }
+    .conflict-item.critical .conflict-code { color: #ff4444; }
+    .conflict-item.warning .conflict-code { color: #ffaa00; }
+    .conflict-title { flex: 1; }
+    .conflict-sev {
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    .conflict-item.critical .conflict-sev { color: #ff4444; }
+    .conflict-item.warning .conflict-sev { color: #ffaa00; }
+
+    /* Heartbeat pulse */
+    .hb-pulse { animation: hb-flash 0.3s ease-out; }
+    @keyframes hb-flash { 0% { color: #00ff88; } 100% { color: inherit; } }
+
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 12px;
+        color: #333;
+        font-size: 10px;
+        border-top: 1px solid #1e1e2e;
+    }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <h1>FactoryLM Live Panel</h1>
+    <div class="header-right">
+        <span class="conn-label">PLC</span>
+        <span id="plcDot" class="conn-dot"></span>
+        <span class="conn-label">VFD</span>
+        <span id="vfdDot" class="conn-dot"></span>
+        <span class="conn-label">Camera</span>
+        <span id="camDot" class="conn-dot"></span>
+        <span class="conn-label">CC</span>
+        <span id="ccDot" class="conn-dot"></span>
+    </div>
+</div>
+
+<!-- Connection Bar -->
+<div id="connBar" class="conn-bar">
+    <div class="conn-inputs">
+        <label>PLC IP</label>
+        <input id="plcIp" type="text" value="192.168.1.100" placeholder="192.168.1.100">
+        <label>Port</label>
+        <input id="plcPort" type="text" value="502" style="width:60px;">
+        <button class="btn" onclick="doConnect()">Connect</button>
+        <button class="btn btn-outline" onclick="doScan()">Scan</button>
+    </div>
+    <div id="connStatusLine" class="conn-status-line" style="display:none;">
+        Connected to <span class="ip" id="connIp"></span>
+        <button class="btn btn-outline" style="margin-left:10px;padding:3px 8px;font-size:10px;" onclick="showConnInputs()">Change</button>
+    </div>
+</div>
+
+<!-- Main Grid: Camera + Belt/AI -->
+<div class="main-grid">
+    <div class="camera-panel">
+        <div id="cameraFallback" class="camera-fallback">No camera feed</div>
+        <img id="cameraFeed" src="" style="display:none;" alt="Belt camera feed"
+             onerror="this.style.display='none'; document.getElementById('cameraFallback').style.display='flex';"
+             onload="this.style.display='block'; document.getElementById('cameraFallback').style.display='none';">
+    </div>
+    <div class="right-panel">
+        <div class="info-card">
+            <h3>Belt Status</h3>
+            <div class="belt-stats">
+                <div class="belt-stat">
+                    <div class="value" id="beltRpm">--</div>
+                    <div class="label">RPM</div>
+                </div>
+                <div class="belt-stat">
+                    <div class="value" id="beltSpeed">--</div>
+                    <div class="label">Speed %</div>
+                </div>
+                <div class="belt-stat">
+                    <div class="value" id="beltOffset">--</div>
+                    <div class="label">Offset px</div>
+                </div>
+                <div class="belt-stat">
+                    <div id="beltStatusBadge" class="status-badge unknown">UNKNOWN</div>
+                    <div class="label" style="margin-top:4px;">Status</div>
+                </div>
+            </div>
+        </div>
+        <div class="info-card ai-section">
+            <h3>AI Diagnosis</h3>
+            <button class="btn" id="diagBtn" onclick="runDiagnosis()">Run Cosmos R2 Diagnosis</button>
+            <div id="aiResult" class="ai-result" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- PLC Tags -->
+<div class="tag-section">
+    <div class="section-divider">
+        <span class="label">PLC Tags</span>
+        <span class="line"></span>
+    </div>
+    <div id="plcGrid" class="tag-grid"></div>
+</div>
+
+<!-- Belt Vision Tags -->
+<div class="tag-section">
+    <div class="section-divider">
+        <span class="label">Belt Encoder</span>
+        <span class="line"></span>
+    </div>
+    <div id="beltGrid" class="tag-grid"></div>
+</div>
+
+<!-- VFD Tags -->
+<div class="tag-section">
+    <div class="section-divider">
+        <span class="label">VFD</span>
+        <span class="line"></span>
+    </div>
+    <div id="vfdGrid" class="tag-grid"></div>
+</div>
+
+<!-- CompactCom Bridge -->
+<div class="tag-section" id="ccSection" style="display:none;">
+    <div class="section-divider">
+        <span class="label">PLC &larr; Pi Bridge</span>
+        <span class="line"></span>
+    </div>
+    <div id="ccGrid" class="tag-grid"></div>
+</div>
+
+<!-- Conflicts -->
+<div id="conflictsBar" class="conflicts-bar" style="display:none;">
+    <div class="section-divider">
+        <span class="label" style="color:#ff4444;">Conflicts</span>
+        <span class="line" style="background:#ff444440;"></span>
+    </div>
+    <div id="conflictsList"></div>
+</div>
+
+<!-- Footer -->
+<div class="footer">FactoryLM Cosmos Cookoff &mdash; Live I/O Panel v2.1</div>
+
+<script>
+// ---- Tag configs ----
+const plcConfig = {
+    motor_running:    { label: 'Motor',     type: 'bool' },
+    motor_speed:      { label: 'Speed %',   type: 'int' },
+    motor_current:    { label: 'Current A',  type: 'float' },
+    temperature:      { label: 'Temp C',    type: 'float', warn: 65, crit: 80 },
+    pressure:         { label: 'Pressure',  type: 'int',   warn: null, crit: null, warnLow: 60 },
+    conveyor_running: { label: 'Conveyor',  type: 'bool' },
+    sensor_1:         { label: 'Sensor 1',  type: 'bool' },
+    sensor_2:         { label: 'Sensor 2',  type: 'bool' },
+    fault_alarm:      { label: 'Fault',     type: 'alarm' },
+    e_stop:           { label: 'E-Stop',    type: 'alarm' },
+    error_code:       { label: 'Error Code', type: 'int' },
+    error_message:    { label: 'Error Msg',  type: 'text' },
+};
+
+const beltConfig = {
+    belt_rpm:                 { label: 'Belt RPM',       type: 'float' },
+    belt_speed_pct:           { label: 'Belt Speed',     type: 'percent' },
+    belt_tracking_offset_px:  { label: 'Tracking Offset', type: 'px', warn: 30, crit: 50 },
+    belt_vision_status:       { label: 'Vision Status',  type: 'status' },
+};
+
+const vfdConfig = {
+    vfd_output_hz:          { label: 'Output Hz',   type: 'hz' },
+    vfd_setpoint_hz:        { label: 'Setpoint Hz', type: 'hz' },
+    vfd_output_amps:        { label: 'Output Amps', type: 'amps' },
+    vfd_dc_bus_volts:       { label: 'DC Bus V',    type: 'volts' },
+    vfd_motor_rpm:          { label: 'Motor RPM',   type: 'int' },
+    vfd_torque_pct:         { label: 'Torque %',    type: 'percent' },
+    vfd_drive_temp_c:       { label: 'Drive Temp',  type: 'temp', warn: 65, crit: 80 },
+    vfd_fault_code:         { label: 'Fault Code',  type: 'fault' },
+    vfd_fault_description:  { label: 'Fault',       type: 'text' },
+};
+
+// ---- Formatting ----
+function formatTag(val, cfg) {
+    if (val === undefined || val === null) return { text: '--', cls: '' };
+    switch (cfg.type) {
+        case 'bool':
+            return val ? { text: 'ON', cls: 'on' } : { text: 'OFF', cls: 'off' };
+        case 'alarm':
+            return val ? { text: 'ACTIVE', cls: 'crit' } : { text: 'OK', cls: 'on' };
+        case 'float':
+        case 'hz':
+        case 'amps':
+        case 'volts':
+        case 'temp': {
+            let num = typeof val === 'number' ? val : parseFloat(val);
+            let cls = '';
+            if (cfg.crit && num >= cfg.crit) cls = 'crit';
+            else if (cfg.warn && num >= cfg.warn) cls = 'warn';
+            let suffix = '';
+            if (cfg.type === 'hz') suffix = ' Hz';
+            else if (cfg.type === 'amps') suffix = ' A';
+            else if (cfg.type === 'volts') suffix = ' V';
+            else if (cfg.type === 'temp') suffix = ' C';
+            return { text: num.toFixed(1) + suffix, cls };
+        }
+        case 'int': {
+            let num = typeof val === 'number' ? val : parseInt(val);
+            let cls = '';
+            if (cfg.crit && num >= cfg.crit) cls = 'crit';
+            else if (cfg.warn && num >= cfg.warn) cls = 'warn';
+            else if (cfg.warnLow && num < cfg.warnLow && num > 0) cls = 'warn';
+            return { text: String(num), cls };
+        }
+        case 'percent':
+            return { text: (typeof val === 'number' ? val.toFixed(1) : val) + '%', cls: '' };
+        case 'px':
+        {
+            let num = typeof val === 'number' ? val : parseFloat(val);
+            let cls = '';
+            if (cfg.crit && Math.abs(num) >= cfg.crit) cls = 'crit';
+            else if (cfg.warn && Math.abs(num) >= cfg.warn) cls = 'warn';
+            return { text: num.toFixed(0) + ' px', cls };
+        }
+        case 'fault':
+            return val > 0 ? { text: String(val), cls: 'crit' } : { text: '0', cls: 'on' };
+        case 'status': {
+            let s = String(val).toUpperCase();
+            let cls = s === 'NORMAL' ? 'on' : s === 'STOPPED' ? 'off' : 'warn';
+            return { text: s, cls };
+        }
+        case 'text':
+            return { text: String(val || '--'), cls: '' };
+        default:
+            return { text: String(val), cls: '' };
+    }
+}
+
+function renderGrid(containerId, config, data) {
+    const el = document.getElementById(containerId);
+    let html = '';
+    for (const [key, cfg] of Object.entries(config)) {
+        const val = data ? data[key] : undefined;
+        const fmt = formatTag(val, cfg);
+        html += `<div class="tag-card">
+            <div class="tag-label">${cfg.label}</div>
+            <div class="tag-value ${fmt.cls}">${fmt.text}</div>
+        </div>`;
+    }
+    el.innerHTML = html;
+}
+
+function renderVfdGrid(data) {
+    const el = document.getElementById('vfdGrid');
+    if (!data || data.vfd_connected === false) {
+        el.innerHTML = '<div class="tag-card-wide">VFD: Not connected</div>';
+        return;
+    }
+    renderGrid('vfdGrid', vfdConfig, data);
+}
+
+// ---- CompactCom config ----
+const ccConfig = {
+    belt_rpm:        { label: 'Belt RPM',   type: 'float', scale: 10 },
+    belt_speed_pct:  { label: 'Belt Speed', type: 'percent', scale: 10 },
+    vfd_output_hz:   { label: 'VFD Hz',     type: 'hz', scale: 100 },
+    ai_fault_code:   { label: 'AI Fault',   type: 'fault' },
+    pi_heartbeat:    { label: 'Heartbeat',  type: 'int' },
+};
+
+// ---- State ----
+let plcConnected = false;
+let vfdData = null;
+let cameraActive = false;
+let pollTimers = [];
+let prevHeartbeat = null;
+
+// ---- Connection ----
+async function doConnect() {
+    const ip = document.getElementById('plcIp').value.trim();
+    const port = parseInt(document.getElementById('plcPort').value.trim()) || 502;
+    try {
+        const resp = await fetch('/api/plc/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip, port, template: 'micro820' }),
+        });
+        if (resp.ok) {
+            plcConnected = true;
+            collapseConnBar(ip, port);
+            startPolling();
+        }
+    } catch (e) {
+        console.error('Connect failed:', e);
+    }
+}
+
+async function doScan() {
+    try {
+        const resp = await fetch('/api/plc/scan?subnet=192.168.1.0/24');
+        const data = await resp.json();
+        if (data.devices && data.devices.length > 0) {
+            const d = data.devices[0];
+            document.getElementById('plcIp').value = d.ip;
+            document.getElementById('plcPort').value = d.port;
+        }
+    } catch (e) {
+        console.error('Scan failed:', e);
+    }
+}
+
+function collapseConnBar(ip, port) {
+    document.getElementById('connBar').classList.add('collapsed');
+    document.getElementById('connIp').textContent = ip + ':' + port;
+    document.getElementById('connStatusLine').style.display = 'block';
+}
+
+function showConnInputs() {
+    document.getElementById('connBar').classList.remove('collapsed');
+    document.getElementById('connStatusLine').style.display = 'none';
+}
+
+// ---- Polling ----
+function startPolling() {
+    // Clear old timers
+    pollTimers.forEach(t => clearInterval(t));
+    pollTimers = [];
+
+    // Start camera
+    const camImg = document.getElementById('cameraFeed');
+    camImg.src = '/api/belt/stream?' + Date.now();
+
+    // PLC tags every 2s
+    pollTimers.push(setInterval(pollPlc, 2000));
+    pollPlc();
+
+    // Belt status every 2s
+    pollTimers.push(setInterval(pollBelt, 2000));
+    pollBelt();
+
+    // VFD status every 2s
+    pollTimers.push(setInterval(pollVfd, 2000));
+    pollVfd();
+
+    // Conflicts every 5s
+    pollTimers.push(setInterval(pollConflicts, 5000));
+    pollConflicts();
+
+    // CompactCom every 2s
+    pollTimers.push(setInterval(pollCompactCom, 2000));
+    pollCompactCom();
+}
+
+async function pollPlc() {
+    try {
+        const resp = await fetch('/api/plc/live');
+        const data = await resp.json();
+        if (data.tags) {
+            renderGrid('plcGrid', plcConfig, data.tags);
+            document.getElementById('plcDot').className = 'conn-dot ok';
+        } else {
+            document.getElementById('plcDot').className = 'conn-dot err';
+        }
+    } catch (e) {
+        document.getElementById('plcDot').className = 'conn-dot err';
+    }
+}
+
+async function pollBelt() {
+    try {
+        const resp = await fetch('/api/belt/status');
+        if (resp.ok) {
+            const data = await resp.json();
+            document.getElementById('beltRpm').textContent = (data.rpm || 0).toFixed(0);
+            document.getElementById('beltSpeed').textContent = (data.speed_pct || 0).toFixed(1);
+            document.getElementById('beltOffset').textContent = (data.offset_px || 0).toFixed(0);
+
+            const badge = document.getElementById('beltStatusBadge');
+            const st = (data.status || 'UNKNOWN').toUpperCase();
+            badge.textContent = st;
+            badge.className = 'status-badge ' + st.toLowerCase();
+
+            renderGrid('beltGrid', beltConfig, {
+                belt_rpm: data.rpm,
+                belt_speed_pct: data.speed_pct,
+                belt_tracking_offset_px: data.offset_px,
+                belt_vision_status: data.status,
+            });
+            document.getElementById('camDot').className = 'conn-dot ok';
+            cameraActive = true;
+        } else {
+            renderGrid('beltGrid', beltConfig, null);
+            document.getElementById('camDot').className = 'conn-dot';
+            cameraActive = false;
+        }
+    } catch (e) {
+        renderGrid('beltGrid', beltConfig, null);
+        document.getElementById('camDot').className = 'conn-dot';
+        cameraActive = false;
+    }
+}
+
+async function pollVfd() {
+    try {
+        const resp = await fetch('/api/vfd/status');
+        const data = await resp.json();
+        vfdData = data;
+        renderVfdGrid(data);
+        document.getElementById('vfdDot').className = data.vfd_connected ? 'conn-dot ok' : 'conn-dot';
+    } catch (e) {
+        renderVfdGrid(null);
+        document.getElementById('vfdDot').className = 'conn-dot';
+    }
+}
+
+async function pollConflicts() {
+    try {
+        const resp = await fetch('/api/conflicts');
+        const data = await resp.json();
+        const bar = document.getElementById('conflictsBar');
+        const list = document.getElementById('conflictsList');
+
+        if (data.conflicts && data.conflicts.length > 0) {
+            bar.style.display = 'block';
+            list.innerHTML = data.conflicts.map(c =>
+                `<div class="conflict-item ${c.severity}">
+                    <span class="conflict-code">${c.code}</span>
+                    <span class="conflict-title">${c.title}</span>
+                    <span class="conflict-sev">${c.severity}</span>
+                </div>`
+            ).join('');
+        } else {
+            bar.style.display = 'none';
+            list.innerHTML = '';
+        }
+    } catch (e) {
+        // Silently ignore conflict poll errors
+    }
+}
+
+// ---- CompactCom polling ----
+async function pollCompactCom() {
+    try {
+        const [regResp, cmdResp] = await Promise.all([
+            fetch('/api/compactcom/registers'),
+            fetch('/api/compactcom/commands'),
+        ]);
+        const regData = await regResp.json();
+        const cmdData = await cmdResp.json();
+
+        const section = document.getElementById('ccSection');
+        const dot = document.getElementById('ccDot');
+
+        if (!regData.published) {
+            section.style.display = 'none';
+            dot.className = 'conn-dot';
+            return;
+        }
+
+        section.style.display = 'block';
+        dot.className = 'conn-dot ok';
+
+        const pub = regData.published;
+        const cmds = cmdData.current_state || {};
+
+        // Build grid HTML
+        let html = '';
+
+        // Published values (scaled)
+        const scaledVals = [
+            { label: 'Belt RPM',   val: (pub.belt_rpm / 10).toFixed(1), cls: '' },
+            { label: 'Belt Speed', val: (pub.belt_speed_pct / 10).toFixed(1) + '%', cls: '' },
+            { label: 'VFD Hz',     val: (pub.vfd_output_hz / 100).toFixed(2) + ' Hz', cls: '' },
+            { label: 'VFD Amps',   val: (pub.vfd_output_amps / 10).toFixed(1) + ' A', cls: '' },
+            { label: 'AI Fault',   val: pub.ai_fault_code, cls: pub.ai_fault_code > 0 ? 'crit' : 'on' },
+            { label: 'Confidence', val: pub.ai_confidence + '%', cls: '' },
+        ];
+
+        for (const s of scaledVals) {
+            html += `<div class="tag-card">
+                <div class="tag-label">${s.label}</div>
+                <div class="tag-value ${s.cls}">${s.val}</div>
+            </div>`;
+        }
+
+        // Heartbeat with pulse
+        const hb = pub.pi_heartbeat;
+        const hbChanged = prevHeartbeat !== null && hb !== prevHeartbeat;
+        prevHeartbeat = hb;
+        html += `<div class="tag-card">
+            <div class="tag-label">Heartbeat</div>
+            <div class="tag-value on ${hbChanged ? 'hb-pulse' : ''}">${hb}</div>
+        </div>`;
+
+        // PLC command state
+        const modeMap = { 0: 'MANUAL', 1: 'AUTO', manual: 'MANUAL', auto: 'AUTO' };
+        const cmdMode = modeMap[cmds.cmd_mode] || String(cmds.cmd_mode).toUpperCase();
+        const cmdRun = cmds.cmd_run ? 'RUN' : 'STOP';
+        const cmdRunCls = cmds.cmd_run ? 'on' : 'off';
+        html += `<div class="tag-card">
+            <div class="tag-label">PLC Cmd</div>
+            <div class="tag-value ${cmdRunCls}">${cmdRun}</div>
+        </div>`;
+        html += `<div class="tag-card">
+            <div class="tag-label">Cmd Speed</div>
+            <div class="tag-value">${(cmds.cmd_speed_pct || 0).toFixed(0)}%</div>
+        </div>`;
+        html += `<div class="tag-card">
+            <div class="tag-label">Mode</div>
+            <div class="tag-value">${cmdMode}</div>
+        </div>`;
+
+        document.getElementById('ccGrid').innerHTML = html;
+    } catch (e) {
+        document.getElementById('ccSection').style.display = 'none';
+        document.getElementById('ccDot').className = 'conn-dot';
+    }
+}
+
+// ---- AI Diagnosis ----
+async function runDiagnosis() {
+    const btn = document.getElementById('diagBtn');
+    const result = document.getElementById('aiResult');
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    result.style.display = 'block';
+    result.textContent = 'Sending video + PLC data to Cosmos R2...';
+
+    try {
+        const resp = await fetch('/api/belt/diagnose', { method: 'POST' });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            if (data.skipped) {
+                result.textContent = data.reason;
+            } else if (data.summary) {
+                result.textContent =
+                    'Summary: ' + data.summary + '\n\n' +
+                    'Root Cause: ' + (data.root_cause || 'N/A') + '\n\n' +
+                    'Confidence: ' + (data.confidence || 'N/A') + '\n\n' +
+                    (data.reasoning || '');
+            } else {
+                result.textContent = JSON.stringify(data, null, 2);
+            }
+        } else {
+            result.textContent = 'Error: ' + (data.detail || resp.statusText);
+        }
+    } catch (e) {
+        result.textContent = 'Error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Cosmos R2 Diagnosis';
+    }
+}
+
+// ---- Init ----
+async function init() {
+    // Check if already connected
+    try {
+        const resp = await fetch('/api/status');
+        const data = await resp.json();
+        if (data.plc && data.plc.polling) {
+            plcConnected = true;
+            const ip = data.plc.ip || '192.168.1.100';
+            const port = data.plc.port || 502;
+            document.getElementById('plcIp').value = ip;
+            document.getElementById('plcPort').value = port;
+            collapseConnBar(ip, port);
+            startPolling();
+        } else {
+            // Render empty grids
+            renderGrid('plcGrid', plcConfig, null);
+            renderGrid('beltGrid', beltConfig, null);
+            renderVfdGrid(null);
+            // Still poll CompactCom even if PLC not connected
+            pollCompactCom();
+        }
+    } catch (e) {
+        renderGrid('plcGrid', plcConfig, null);
+        renderGrid('beltGrid', beltConfig, null);
+        renderVfdGrid(null);
+    }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -56,6 +56,27 @@ def test_wifi_scan():
         assert "error" in data
         assert data["error"] == "wifi_unavailable"
 
-def test_root_redirects():
+def test_root_serves_panel_or_redirects():
     resp = client.get("/", follow_redirects=False)
-    assert resp.status_code in [301, 302, 307]
+    assert resp.status_code in [200, 301, 302, 307]
+
+
+def test_panel_route():
+    resp = client.get("/panel")
+    assert resp.status_code == 200
+    assert "FactoryLM" in resp.text
+
+
+def test_vfd_status_not_configured():
+    resp = client.get("/api/vfd/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["vfd_connected"] is False
+
+
+def test_conflicts_empty_when_no_vfd():
+    resp = client.get("/api/conflicts")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["conflicts"] == []
+    assert data["vfd_connected"] is False

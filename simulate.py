@@ -51,6 +51,10 @@ def _start_belt_tachometer(video_source: str | int) -> None:
     import net.api.main as api
     api.belt_tachometer = tach
 
+    # Hot-swap into publisher if CompactCom is running
+    if hasattr(api, 'compactcom_publisher') and api.compactcom_publisher is not None:
+        api.compactcom_publisher.set_belt_tachometer(tach)
+
     try:
         source = int(video_source)
     except (ValueError, TypeError):
@@ -98,6 +102,20 @@ def main():
     args = parser.parse_args()
 
     video_source = os.environ.get("VIDEO_SOURCE")
+    plc_host = os.environ.get("PLC_HOST", "")
+    plc_port = os.environ.get("PLC_PORT", "502")
+    cc_port = os.environ.get("PI_COMPACTCOM_PORT", "")
+
+    # Banner
+    if plc_host:
+        logger.info(
+            "Mode: REAL PLC (Modbus TCP %s:%s)", plc_host, plc_port
+        )
+    else:
+        logger.info("Mode: SIMULATOR (no PLC_HOST set)")
+
+    if cc_port:
+        logger.info("PI_COMPACTCOM_PORT=%s — CompactCom server will start", cc_port)
 
     if video_source is not None:
         logger.info("VIDEO_SOURCE=%s — starting belt tachometer", video_source)
@@ -110,7 +128,7 @@ def main():
         # Give the tachometer a moment to initialize
         time.sleep(1.0)
     else:
-        logger.info("No VIDEO_SOURCE — running in V1 mode (no belt tachometer)")
+        logger.info("No VIDEO_SOURCE — running without belt tachometer")
 
     logger.info("Starting API server on %s:%d", args.host, args.port)
     uvicorn.run(

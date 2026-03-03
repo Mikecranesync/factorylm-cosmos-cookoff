@@ -27,6 +27,7 @@ class Poller:
         self.mode = os.environ.get("FACTORYLM_NET_MODE", "real")
         self._reader = None
         self._sim = None
+        self._tag_source = None  # ModbusTagSource for PLC_HOST mode
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._latest: dict | None = None
@@ -48,6 +49,8 @@ class Poller:
 
     @property
     def plc_connected(self) -> bool:
+        if self._tag_source is not None:
+            return self._tag_source.connected
         if self.mode == "sim":
             return self._sim is not None
         return self._reader is not None and self._reader.connected
@@ -167,7 +170,29 @@ class Poller:
         return {row[0]: row[1] for row in rows}
 
     def _init_source(self):
-        """Initialize Modbus reader or simulator based on mode."""
+        """Initialize tag source based on mode.
+
+        Priority: PLC_HOST env var > configured real Modbus > simulator.
+        """
+        # PLC_HOST env var — highest priority, canonical Micro 820 map
+        plc_host = os.environ.get("PLC_HOST", "")
+        if plc_host:
+            plc_port = int(os.environ.get("PLC_PORT", "502"))
+            from net.drivers.modbus_tag_source import ModbusTagSource
+
+            self._tag_source = ModbusTagSource(host=plc_host, port=plc_port)
+            if self._tag_source.connect():
+                logger.info(
+                    "Poller using ModbusTagSource → %s:%d (PLC_HOST)",
+                    plc_host,
+                    plc_port,
+                )
+                return
+            logger.warning(
+                "ModbusTagSource failed to connect, falling through"
+            )
+            self._tag_source = None
+
         if self.mode == "sim":
             from net.sim.plc_simulator import PLCSimulator
             self._sim = PLCSimulator(
@@ -238,6 +263,9 @@ class Poller:
 
     def _read_once(self) -> dict | None:
         """Single read from appropriate source."""
+        if self._tag_source:
+            snap = self._tag_source.tick()
+            return snap.to_dict()
         if self.mode == "sim" and self._sim:
             snap = self._sim.tick()
             return snap.to_dict()
