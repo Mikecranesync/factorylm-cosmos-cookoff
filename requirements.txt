@@ -12,3 +12,4 @@ pycomm3
 opcua
 python-multipart
 aiosqlite
+opencv-python

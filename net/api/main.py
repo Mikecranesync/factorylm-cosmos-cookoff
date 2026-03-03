@@ -45,6 +45,7 @@ def connect_wifi(ssid, password):
     return _wifi_scanner.connect_network(ssid, password)
 from net.services.poller import Poller
 from cosmos.client import CosmosClient
+from cosmos.reasoner import BeltVideoReasoner
 
 # Try to import qrcode for QR generation
 try:
@@ -68,6 +69,10 @@ poller = Poller(db_path=DB_PATH)
 
 # Cosmos AI client (singleton)
 cosmos_client = CosmosClient()
+
+# Belt tachometer + reasoner (initialized when camera available)
+belt_tachometer = None  # Set by simulate.py or external caller
+belt_reasoner = BeltVideoReasoner()
 
 WIZARD_PATH = Path(__file__).parent.parent / "portal" / "wizard.html"
 
@@ -746,3 +751,131 @@ async def gateway_qr():
             status_code=500,
             detail=f"QR code generation failed: {str(e)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Belt tachometer endpoints (V1.5)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/belt/status")
+async def belt_status():
+    """Return current belt tachometer readings: RPM, speed %, offset, status.
+
+    Lightweight — no AI call. Returns 503 if no camera / tachometer.
+    """
+    if belt_tachometer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Belt tachometer not available — no camera connected",
+        )
+
+    return {
+        "rpm": belt_tachometer.rpm,
+        "speed_pct": round(belt_tachometer.speed_pct, 1),
+        "offset_px": belt_tachometer.offset_px,
+        "status": belt_tachometer.status.value,
+        "tape_detected": belt_tachometer.tape_detected,
+        "calibrated": belt_tachometer._calibrated,
+        "baseline_rpm": round(belt_tachometer._baseline_rpm, 1),
+    }
+
+
+@app.post("/api/belt/diagnose")
+async def belt_diagnose():
+    """Trigger full Cosmos R2 video analysis on the belt.
+
+    Sends the last 5 seconds of video + PLC tags + tachometer data to
+    the AI for diagnosis. Skips the expensive AI call if belt is NORMAL.
+    """
+    if belt_tachometer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Belt tachometer not available — no camera connected",
+        )
+
+    from cosmos.belt_tachometer import BeltStatus
+
+    # Skip AI call if belt is healthy — no point asking "what's wrong?"
+    if belt_tachometer.status == BeltStatus.NORMAL:
+        return {
+            "skipped": True,
+            "reason": "Belt status is NORMAL — no diagnosis needed",
+            "status": belt_tachometer.status.value,
+            "rpm": belt_tachometer.rpm,
+        }
+
+    # Gather data for diagnosis
+    tach_data = {
+        "rpm": belt_tachometer.rpm,
+        "speed_pct": belt_tachometer.speed_pct,
+        "offset_px": belt_tachometer.offset_px,
+        "status": belt_tachometer.status.value,
+    }
+
+    tags = poller.latest or {}
+    video_bytes = belt_tachometer.get_clip_bytes()
+
+    # Run diagnosis (may be async-heavy — run in executor)
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: belt_reasoner.diagnose_belt_video(
+            video_bytes=video_bytes,
+            tachometer_data=tach_data,
+            tags=tags,
+        ),
+    )
+
+    return result
+
+
+@app.get("/api/belt/stream")
+async def belt_stream():
+    """Live MJPEG video stream with tachometer overlay.
+
+    Open in a browser: http://host:port/api/belt/stream
+    """
+    if belt_tachometer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Belt tachometer not available — no camera connected",
+        )
+
+    import cv2
+
+    video_source = os.environ.get("VIDEO_SOURCE", "0")
+    try:
+        source = int(video_source)
+    except ValueError:
+        source = video_source
+
+    cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        raise HTTPException(status_code=503, detail="Cannot open video source")
+
+    def generate():
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Process through tachometer and annotate
+                belt_tachometer.process_frame(frame)
+                annotated = belt_tachometer.annotate_frame(frame)
+
+                # Encode as JPEG
+                _, jpeg = cv2.imencode(".jpg", annotated)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n"
+                    + jpeg.tobytes()
+                    + b"\r\n"
+                )
+        finally:
+            cap.release()
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
