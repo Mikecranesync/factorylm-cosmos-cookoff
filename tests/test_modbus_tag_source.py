@@ -69,6 +69,14 @@ class TestModbusTagSource:
         assert snap.motor_speed == 60
         assert snap.error_code == 0
         assert snap.error_message == "No error"
+        # New I/O fields
+        assert len(snap.coils) == 18
+        assert snap.coils[0] == 1  # conveyor ON
+        assert snap.coils[1] == 0
+        assert isinstance(snap.io, dict)
+        assert snap.io["conveyor"] == 1
+        assert snap.io["sensor_start"] == 0
+        assert snap.e_stop_ok is False  # coils[8]=False, coils[9]=False
 
     @patch("net.drivers.modbus_tag_source.ModbusTagSource.connect", return_value=True)
     def test_register_scaling(self, mock_connect):
@@ -109,6 +117,7 @@ class TestModbusTagSource:
 
         assert snap.fault_alarm is True
         assert snap.e_stop is True
+        assert snap.e_stop_ok is False
 
     @patch("net.drivers.modbus_tag_source.ModbusTagSource.connect", return_value=True)
     def test_estop_safe_state(self, mock_connect):
@@ -130,6 +139,7 @@ class TestModbusTagSource:
 
         assert snap.fault_alarm is False
         assert snap.e_stop is False
+        assert snap.e_stop_ok is True
 
     @patch("net.drivers.modbus_tag_source.ModbusTagSource.connect", return_value=True)
     def test_coil_read_error_returns_comms_fault(self, mock_connect):
@@ -215,3 +225,8 @@ class TestModbusTagSource:
         assert d["node_id"].startswith("plc-")
         assert "motor_speed" in d
         assert "timestamp" in d
+        assert "coils" in d
+        assert len(d["coils"]) == 18
+        assert "io" in d
+        assert "conveyor" in d["io"]
+        assert "e_stop_ok" in d

@@ -1,5 +1,5 @@
 [Unit]
-Description=Pi Factory — Cosmos Copilot Wizard (v1.1.1)
+Description=Pi Factory — Edge Gateway (v3.0)
 Documentation=https://github.com/Mikecranesync/factorylm-cosmos-cookoff
 After=network-online.target
 Wants=network-online.target
@@ -7,11 +7,18 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/factorylm-cosmos-cookoff
-Environment="PATH=/home/pi/factorylm/services/plc-modbus/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=/opt/factorylm
+Environment="PATH=/opt/factorylm/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="FACTORYLM_NET_MODE=real"
-Environment="FACTORYLM_NET_DB=/home/pi/factorylm-cosmos-cookoff/net.db"
-ExecStart=/home/pi/factorylm/services/plc-modbus/.venv/bin/uvicorn net.api.main:app --host 0.0.0.0 --port 8000
+Environment="FACTORYLM_NET_DB=/opt/factorylm/data/net.db"
+Environment="PLC_HOST=192.168.1.100"
+Environment="PLC_PORT=502"
+Environment="PI_COMPACTCOM_PORT=5020"
+# Optional — enable when VFD + camera are wired:
+# Environment="VFD_HOST=192.168.1.100"
+# Environment="VFD_SLAVE=1"
+# Environment="VIDEO_SOURCE=0"
+ExecStart=/opt/factorylm/venv/bin/python server.py --port 8000
 Restart=always
 RestartSec=5
 StandardOutput=journal

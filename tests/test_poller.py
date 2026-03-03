@@ -42,6 +42,14 @@ def test_poller_with_mocked_tag_source():
         "e_stop": False,
         "error_code": 0,
         "error_message": "No error",
+        "coils": [1] + [0] * 17,
+        "io": {
+            "conveyor": 1, "emitter": 0, "sensor_start": 0,
+            "sensor_end": 0, "run_command": 0, "di_center": 0,
+            "di_estop_no": 0, "di_estop_nc": 0, "di_right": 0,
+            "di_green_btn": 0, "do_fwd": 0, "do_rev": 0, "do_aux": 0,
+        },
+        "e_stop_ok": False,
     }
 
     mock_source = MagicMock()

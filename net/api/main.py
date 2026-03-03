@@ -875,14 +875,26 @@ async def belt_stream():
     """Live MJPEG video stream with tachometer overlay.
 
     Open in a browser: http://host:port/api/belt/stream
+    Returns a grey 'No camera' frame when no camera is available.
     """
-    if belt_tachometer is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Belt tachometer not available — no camera connected",
-        )
-
     import cv2
+    import numpy as np
+
+    def _no_camera_frame():
+        """Single grey JPEG frame with 'No camera' text."""
+        grey = np.zeros((240, 320, 3), dtype=np.uint8) + 40
+        cv2.putText(grey, "No camera", (70, 125),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (180, 180, 180), 2)
+        _, buf = cv2.imencode(".jpg", grey)
+        yield (b"--frame\r\n"
+               b"Content-Type: image/jpeg\r\n\r\n"
+               + buf.tobytes() + b"\r\n")
+
+    if belt_tachometer is None:
+        return StreamingResponse(
+            _no_camera_frame(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
 
     video_source = os.environ.get("VIDEO_SOURCE", "0")
     try:
@@ -892,7 +904,10 @@ async def belt_stream():
 
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
-        raise HTTPException(status_code=503, detail="Cannot open video source")
+        return StreamingResponse(
+            _no_camera_frame(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+        )
 
     def generate():
         try:

@@ -6,7 +6,7 @@ Requires=pi-factory.service
 [Service]
 Type=simple
 User=pi
-ExecStart=/bin/bash -c 'while true; do sleep 30; curl -sf http://localhost:8000/api/status > /dev/null || (echo "Pi Factory unresponsive, restarting..." | systemd-cat -t pi-factory-watchdog && systemctl restart pi-factory); done'
+ExecStart=/bin/bash -c 'while true; do sleep 30; curl -sf http://localhost:8000/api/status > /dev/null || (echo "Pi Factory unresponsive, restarting..." | systemd-cat -t pi-factory-watchdog && sudo systemctl restart pi-factory); done'
 Restart=always
 RestartSec=60
 

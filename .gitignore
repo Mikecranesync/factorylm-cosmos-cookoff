@@ -42,5 +42,8 @@ coverage/
 # Claude local settings
 .claude/
 
+# MCP server config (machine-local paths)
+.mcp.json
+
 # Serena AI agent cache
 .serena/

@@ -80,6 +80,25 @@ class ModbusTagSource:
                 return self._error_snapshot("coil read error")
 
             coils = [bool(b) for b in coil_result.bits[:18]]
+            coils_int = [int(b) for b in coils]
+
+            io = {
+                "conveyor":     coils_int[0],
+                "emitter":      coils_int[1],
+                "sensor_start": coils_int[2],
+                "sensor_end":   coils_int[3],
+                "run_command":  coils_int[4],
+                "di_center":    coils_int[7],
+                "di_estop_no":  coils_int[8],
+                "di_estop_nc":  coils_int[9],
+                "di_right":     coils_int[10],
+                "di_green_btn": coils_int[11],
+                "do_fwd":       coils_int[15],
+                "do_rev":       coils_int[16],
+                "do_aux":       coils_int[17],
+            }
+
+            e_stop_ok = not coils[8] and coils[9]
 
             # Read holding registers 100-105
             reg_result = self._client.read_holding_registers(
@@ -135,6 +154,9 @@ class ModbusTagSource:
                 error_message=ERROR_CODES.get(
                     error_code, f"Unknown error {error_code}"
                 ),
+                coils=coils_int,
+                io=io,
+                e_stop_ok=e_stop_ok,
             )
 
         except Exception as e:
@@ -164,4 +186,12 @@ class ModbusTagSource:
             e_stop=False,
             error_code=5,
             error_message=f"Communication loss: {reason}",
+            coils=[0] * 18,
+            io={
+                "conveyor": 0, "emitter": 0, "sensor_start": 0,
+                "sensor_end": 0, "run_command": 0, "di_center": 0,
+                "di_estop_no": 0, "di_estop_nc": 0, "di_right": 0,
+                "di_green_btn": 0, "do_fwd": 0, "do_rev": 0, "do_aux": 0,
+            },
+            e_stop_ok=False,
         )

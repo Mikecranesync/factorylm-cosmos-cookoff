@@ -47,6 +47,9 @@ class TagSnapshot:
     e_stop: bool
     error_code: int
     error_message: str
+    coils: list        # raw 18-element list of 0/1 ints
+    io: dict           # named coils for panel display
+    e_stop_ok: bool    # True when E-stop is released (safe state)
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)

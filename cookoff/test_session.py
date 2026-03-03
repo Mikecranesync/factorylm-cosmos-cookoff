@@ -54,8 +54,9 @@ from cookoff import capture_fio          # noqa: E402
 from cookoff import diagnosis_engine     # noqa: E402
 
 CLIPS_DIR = REPO_ROOT / "cookoff" / "clips"
-VLLM_MODELS_URL = "http://localhost:8000/v1/models"
-VLLM_CHAT_URL = "http://localhost:8000/v1/chat/completions"
+_VLLM_BASE = os.environ.get("VLLM_BASE_URL", os.environ.get("VLLM_URL", "http://localhost:8001/v1/chat/completions").rsplit("/chat/completions", 1)[0])
+VLLM_MODELS_URL = f"{_VLLM_BASE}/models"
+VLLM_CHAT_URL = f"{_VLLM_BASE}/chat/completions"
 PLC_HOST = "192.168.1.100"
 PLC_PORT = 502
 EXPECTED_MODEL = "nvidia/Cosmos-Reason2-8B"

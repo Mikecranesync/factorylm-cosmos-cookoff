@@ -23,13 +23,15 @@ Internet (Discord / Web / Telegram)
   FactoryLM Matrix (VPS 100.68.120.99)
          | task dispatch via Tailscale
          v
-  Edge Gateway (pymodbus over Tailscale)
-         | Modbus TCP, ~33ms latency
+  Raspberry Pi (192.168.1.30:8000)    ← Edge Gateway
+         | Modbus TCP read (coils+regs)
          v
   Micro 820 PLC (192.168.1.100:502)
          | RS485 Modbus RTU
          v
   ATO VFD --> Motor --> Conveyor Belt
+         ^
+  Pi CompactCom (:5020) ← PLC reads 21 regs via MSG
 ```
 
 ## Hardware Reference
@@ -99,10 +101,16 @@ factorylm-cosmos-cookoff/
 ├── services/             # Matrix API dashboard + PLC Modbus driver
 ├── sim/                  # Factory I/O bridge (plc_simulator removed in v3.0)
 ├── config/               # YAML configs (factoryio.yaml)
+├── pi-factory/           # Raspberry Pi deployment
+│   ├── setup.sh          # Master setup script (9 steps)
+│   ├── systemd/          # Service files
+│   └── configs/          # Config templates
 ├── docs/                 # Architecture + CONVEYOR_OF_DESTINY.md
 │   ├── CONVEYOR_OF_DESTINY.md    # THE PLAYBOOK — single source of truth
-│   ├── CONVEYOR_OF_DESTINY_PLAN.md
+│   ├── PI_DEPLOY_CHECKLIST.md    # Pi deployment runbook
 │   └── WIRING_GUIDE.md
+├── tools/                # Standalone utilities
+│   └── plc_live_reader.py  # pylogix EtherNet/IP tag discovery
 ├── video/                # Video analysis pipeline
 └── infra/                # Docker Compose
 ```
@@ -150,6 +158,16 @@ If you encounter a naming conflict, check `CONVEYOR_OF_DESTINY.md` Section 6 tab
 - **Human in Loop**: Mike approves what ships
 - **Safety**: Hardware E-stop always wired. Software never overrides hardware safety.
 
+## Raspberry Pi Edge Gateway (192.168.1.30)
+
+The Pi runs the full v3.0 pipeline: ModbusTagSource → Poller → Publisher → CompactCom.
+
+- **Dashboard**: `http://192.168.1.30:8000`
+- **Live tags**: `http://192.168.1.30:8000/api/plc/live`
+- **CompactCom**: `192.168.1.30:5020` (21 registers, PLC reads via MSG FC3)
+- **Systemd**: `pi-factory.service` + watchdog
+- **Deploy guide**: `docs/PI_DEPLOY_CHECKLIST.md`
+
 ## Quick Commands
 
 ```bash
@@ -167,6 +185,12 @@ python -m uvicorn services.matrix.app:app --host 0.0.0.0 --port 8000
 
 # Read PLC coils (pymodbus one-liner)
 python -c "from pymodbus.client import ModbusTcpClient; c=ModbusTcpClient('192.168.1.100',port=502,timeout=3); c.connect(); r=c.read_coils(0,18); print([int(b) for b in r.bits[:18]])"
+
+# Read CompactCom registers from Pi (from any machine)
+python -c "from pymodbus.client import ModbusTcpClient; c=ModbusTcpClient('192.168.1.30',port=5020,timeout=3); c.connect(); r=c.read_holding_registers(0,21); print(r.registers)"
+
+# pylogix tag discovery (EtherNet/IP)
+python tools/plc_live_reader.py --host 192.168.1.100
 ```
 
 Full docs: https://github.com/Mikecranesync/factorylm/blob/main/README.md

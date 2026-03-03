@@ -15,10 +15,11 @@
 #    3. Sets up Python venv with all packages
 #    4. Copies application code
 #    5. Configures WiFi captive portal (hostapd + dnsmasq)
-#    6. Installs systemd services (auto-start on boot)
-#    7. Generates unique gateway ID
-#    8. Sets Pi Factory branding (hostname, MOTD, splash)
-#    9. Enables and starts everything
+#    6. Installs Tailscale (cluster VPN — enables internet control)
+#    7. Installs systemd services (auto-start on boot)
+#    8. Generates unique gateway ID
+#    9. Sets Pi Factory branding (hostname, MOTD, splash)
+#   10. Enables and starts everything
 #
 #  Compatible: Raspberry Pi 3B+, Pi 4, Pi 5, Pi Zero 2W
 #  OS: Raspberry Pi OS Bookworm (64-bit recommended)
@@ -111,7 +112,7 @@ check_pi() {
 # Step 1: System Dependencies
 # =============================================================================
 install_system_deps() {
-    step "1/9" "Installing system dependencies"
+    step "1/10" "Installing system dependencies"
 
     apt-get update -qq
 
@@ -131,6 +132,8 @@ install_system_deps() {
         iw
         # Modbus serial (for VFD RS485)
         python3-serial
+        # mDNS (pi-factory.local hostname resolution — not included in Bookworm Lite)
+        avahi-daemon
         # Misc
         xxd
         curl
@@ -145,7 +148,7 @@ install_system_deps() {
 # Step 2: Directory Structure
 # =============================================================================
 create_directories() {
-    step "2/9" "Creating Pi Factory directory structure"
+    step "2/10" "Creating Pi Factory directory structure"
 
     mkdir -p "${APP_DIR}"
     mkdir -p "${APP_DIR}/net/api"
@@ -156,6 +159,7 @@ create_directories() {
     mkdir -p "${APP_DIR}/net/sim"
     mkdir -p "${APP_DIR}/net/diagnosis"
     mkdir -p "${APP_DIR}/config"
+    mkdir -p "${APP_DIR}/tools"
     mkdir -p "${DATA_DIR}"
     mkdir -p "${LOG_DIR}"
 
@@ -170,7 +174,7 @@ create_directories() {
 # Step 3: Python Virtual Environment
 # =============================================================================
 setup_python_venv() {
-    step "3/9" "Setting up Python virtual environment"
+    step "3/10" "Setting up Python virtual environment"
 
     python3 -m venv "${VENV_DIR}"
 
@@ -181,6 +185,7 @@ setup_python_venv() {
     "${VENV_DIR}/bin/pip" install -q \
         "pymodbus>=3.6,<4.0" \
         "pycomm3>=1.2,<2.0" \
+        "pylogix>=1.0,<2.0" \
         "opcua>=0.98,<1.0" \
         "fastapi>=0.100" \
         "uvicorn[standard]" \
@@ -200,7 +205,7 @@ setup_python_venv() {
 # Step 4: Copy Application Code
 # =============================================================================
 copy_app_code() {
-    step "4/9" "Deploying Pi Factory application"
+    step "4/10" "Deploying Pi Factory application"
 
     # Copy net/ application package
     if [[ -d "${REPO_DIR}/net" ]]; then
@@ -214,6 +219,20 @@ copy_app_code() {
     if [[ -f "${REPO_DIR}/config/factoryio.yaml" ]]; then
         cp "${REPO_DIR}/config/factoryio.yaml" "${APP_DIR}/config/"
         ok "Copied config/factoryio.yaml"
+    fi
+
+    # Copy server.py entry point
+    if [[ -f "${REPO_DIR}/server.py" ]]; then
+        cp "${REPO_DIR}/server.py" "${APP_DIR}/"
+        ok "Copied server.py"
+    else
+        fail "Cannot find server.py in ${REPO_DIR}"
+    fi
+
+    # Copy tools (pylogix tag reader, etc.)
+    if [[ -f "${REPO_DIR}/tools/plc_live_reader.py" ]]; then
+        cp "${REPO_DIR}/tools/plc_live_reader.py" "${APP_DIR}/tools/"
+        ok "Copied tools/plc_live_reader.py"
     fi
 
     # Copy requirements.txt
@@ -241,7 +260,7 @@ copy_app_code() {
 # Step 5: WiFi Captive Portal
 # =============================================================================
 setup_captive_portal() {
-    step "5/9" "Configuring WiFi captive portal"
+    step "5/10" "Configuring WiFi captive portal"
 
     if [[ "${PI_FACTORY_DEV:-0}" == "1" ]]; then
         warn "Dev mode — skipping WiFi AP setup"
@@ -320,15 +339,32 @@ NM_CONF
 }
 
 # =============================================================================
-# Step 6: Systemd Services
+# Step 6: Tailscale (Cluster VPN)
+# =============================================================================
+install_tailscale() {
+    step "6/10" "Installing Tailscale"
+
+    if command -v tailscale &> /dev/null; then
+        ok "Tailscale already installed ($(tailscale version 2>/dev/null | head -1))"
+    else
+        curl -fsSL https://tailscale.com/install.sh | sh
+        ok "Tailscale installed"
+    fi
+
+    warn "After setup completes, run: sudo tailscale up"
+    warn "  (requires browser auth on first run)"
+}
+
+# =============================================================================
+# Step 7: Systemd Services
 # =============================================================================
 install_services() {
-    step "6/9" "Installing systemd services"
+    step "7/10" "Installing systemd services"
 
     # Main application service
     cat > /etc/systemd/system/pi-factory.service << SERVICE
 [Unit]
-Description=Pi Factory — Pi Factory Gateway
+Description=Pi Factory — Edge Gateway (v3.0)
 Documentation=https://github.com/Mikecranesync/factorylm-cosmos-cookoff
 After=network-online.target
 Wants=network-online.target
@@ -340,7 +376,10 @@ WorkingDirectory=${APP_DIR}
 Environment="PATH=${VENV_DIR}/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="FACTORYLM_NET_MODE=real"
 Environment="FACTORYLM_NET_DB=${DATA_DIR}/net.db"
-ExecStart=${VENV_DIR}/bin/uvicorn net.api.main:app --host 0.0.0.0 --port 8000
+Environment="PLC_HOST=192.168.1.100"
+Environment="PLC_PORT=502"
+Environment="PI_COMPACTCOM_PORT=5020"
+ExecStart=${VENV_DIR}/bin/python server.py --port 8000
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -361,13 +400,18 @@ Requires=pi-factory.service
 [Service]
 Type=simple
 User=${PI_USER}
-ExecStart=/bin/bash -c 'while true; do sleep 30; curl -sf http://localhost:8000/api/status > /dev/null || (echo "Pi Factory unresponsive, restarting..." | systemd-cat -t pi-factory-watchdog && systemctl restart pi-factory); done'
+ExecStart=/bin/bash -c 'while true; do sleep 30; curl -sf http://localhost:8000/api/status > /dev/null || (echo "Pi Factory unresponsive, restarting..." | systemd-cat -t pi-factory-watchdog && sudo systemctl restart pi-factory); done'
 Restart=always
 RestartSec=60
 
 [Install]
 WantedBy=multi-user.target
 WATCHDOG
+
+    # Sudoers drop-in: let pi user restart the service without a password (for watchdog)
+    echo "${PI_USER} ALL=(ALL) NOPASSWD: /bin/systemctl restart pi-factory" > /etc/sudoers.d/pi-factory-watchdog
+    chmod 0440 /etc/sudoers.d/pi-factory-watchdog
+    ok "Sudoers drop-in for watchdog restart"
 
     # Reload and enable
     systemctl daemon-reload
@@ -379,10 +423,10 @@ WATCHDOG
 }
 
 # =============================================================================
-# Step 7: Generate Gateway Identity
+# Step 8: Generate Gateway Identity
 # =============================================================================
 generate_gateway_id() {
-    step "7/9" "Generating unique gateway identity"
+    step "8/10" "Generating unique gateway identity"
 
     GATEWAY_ID="flm-$(head -c 6 /dev/urandom | xxd -p)"
 
@@ -404,10 +448,10 @@ CONFIG
 }
 
 # =============================================================================
-# Step 8: Pi Factory Branding
+# Step 9: Pi Factory Branding
 # =============================================================================
 setup_branding() {
-    step "8/9" "Applying Pi Factory branding"
+    step "9/10" "Applying Pi Factory branding"
 
     # Set hostname
     hostnamectl set-hostname "${HOSTNAME_NEW}" 2>/dev/null || echo "${HOSTNAME_NEW}" > /etc/hostname
@@ -469,10 +513,10 @@ PROFILE
 }
 
 # =============================================================================
-# Step 9: Launch Everything
+# Step 10: Launch Everything
 # =============================================================================
 launch() {
-    step "9/9" "Starting Pi Factory"
+    step "10/10" "Starting Pi Factory"
 
     # Start services
     systemctl start pi-factory.service || warn "Could not start pi-factory (may need reboot)"
@@ -547,6 +591,7 @@ main() {
     setup_python_venv
     copy_app_code
     setup_captive_portal
+    install_tailscale
     install_services
     generate_gateway_id
     setup_branding

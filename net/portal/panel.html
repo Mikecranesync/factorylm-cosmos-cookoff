@@ -291,6 +291,42 @@
     .conflict-item.critical .conflict-sev { color: #ff4444; }
     .conflict-item.warning .conflict-sev { color: #ffaa00; }
 
+    /* Digital I/O dots */
+    .io-grid {
+        display: flex;
+        gap: 16px;
+    }
+    .io-col {
+        flex: 1;
+        min-width: 0;
+    }
+    .io-header {
+        font-size: 10px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #1e1e2e;
+    }
+    .io-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+    }
+    .io-label {
+        font-size: 11px;
+        color: #999;
+    }
+    .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #555;
+        flex-shrink: 0;
+    }
+
     /* Heartbeat pulse */
     .hb-pulse { animation: hb-flash 0.3s ease-out; }
     @keyframes hb-flash { 0% { color: #00ff88; } 100% { color: inherit; } }
@@ -385,6 +421,40 @@
         <span class="line"></span>
     </div>
     <div id="plcGrid" class="tag-grid"></div>
+</div>
+
+<!-- Digital I/O -->
+<div class="tag-section">
+    <div class="section-divider">
+        <span class="label">Digital I/O</span>
+        <span class="line"></span>
+    </div>
+    <div class="io-grid">
+        <div class="io-col">
+            <div class="io-header">Inputs</div>
+            <div class="io-row"><span class="dot" id="io_di_center"></span><span class="io-label">3-pos CENTER</span></div>
+            <div class="io-row"><span class="dot" id="io_di_right"></span><span class="io-label">3-pos RIGHT</span></div>
+            <div class="io-row"><span class="dot" id="io_di_green_btn"></span><span class="io-label">Green Button</span></div>
+            <div class="io-row"><span class="dot" id="io_sensor_start"></span><span class="io-label">Sensor START</span></div>
+            <div class="io-row"><span class="dot" id="io_sensor_end"></span><span class="io-label">Sensor END</span></div>
+            <div class="io-row"><span class="dot" id="io_di_estop_no"></span><span class="io-label">E-Stop NO</span></div>
+            <div class="io-row"><span class="dot" id="io_di_estop_nc"></span><span class="io-label">E-Stop NC</span></div>
+        </div>
+        <div class="io-col">
+            <div class="io-header">Outputs</div>
+            <div class="io-row"><span class="dot" id="io_conveyor"></span><span class="io-label">Conveyor</span></div>
+            <div class="io-row"><span class="dot" id="io_do_fwd"></span><span class="io-label">VFD FWD</span></div>
+            <div class="io-row"><span class="dot" id="io_do_rev"></span><span class="io-label">VFD REV</span></div>
+            <div class="io-row"><span class="dot" id="io_do_aux"></span><span class="io-label">Aux Output</span></div>
+            <div class="io-row"><span class="dot" id="io_run_command"></span><span class="io-label">RunCommand</span></div>
+            <div class="io-row"><span class="dot" id="io_emitter"></span><span class="io-label">Emitter</span></div>
+        </div>
+        <div class="io-col">
+            <div class="io-header">Derived</div>
+            <div class="io-row"><span class="dot" id="io_fault_alarm"></span><span class="io-label">Fault Alarm</span></div>
+            <div class="io-row"><span class="dot" id="io_e_stop_ok"></span><span class="io-label">E-Stop OK</span></div>
+        </div>
+    </div>
 </div>
 
 <!-- Belt Vision Tags -->
@@ -518,6 +588,18 @@ function formatTag(val, cfg) {
     }
 }
 
+function setIoDot(id, val) {
+    const el = document.getElementById('io_' + id);
+    if (!el) return;
+    if (val === null || val === undefined) {
+        el.style.background = '#555';   // grey = unknown
+    } else if (val === 1 || val === true) {
+        el.style.background = '#22c55e'; // green = ON
+    } else {
+        el.style.background = '#ef4444'; // red = OFF
+    }
+}
+
 function renderGrid(containerId, config, data) {
     const el = document.getElementById(containerId);
     let html = '';
@@ -558,6 +640,14 @@ let pollTimers = [];
 let prevHeartbeat = null;
 
 // ---- Connection ----
+function showConnError(msg) {
+    const line = document.getElementById('connStatusLine');
+    line.style.display = 'block';
+    line.innerHTML = '<span style="color:#ff4444;">' + msg + '</span>' +
+        ' <button class="btn btn-outline" style="margin-left:10px;padding:3px 8px;font-size:10px;" onclick="showConnInputs()">Retry</button>';
+    document.getElementById('plcDot').className = 'conn-dot err';
+}
+
 async function doConnect() {
     const ip = document.getElementById('plcIp').value.trim();
     const port = parseInt(document.getElementById('plcPort').value.trim()) || 502;
@@ -571,9 +661,21 @@ async function doConnect() {
             plcConnected = true;
             collapseConnBar(ip, port);
             startPolling();
+            // Check reachability after first poll cycle
+            setTimeout(async () => {
+                try {
+                    const live = await fetch('/api/plc/live');
+                    const data = await live.json();
+                    if (!data.tags) {
+                        showConnError('PLC not reachable at ' + ip + ' \u2014 check power and cable');
+                    }
+                } catch (_) {}
+            }, 3000);
+        } else {
+            showConnError('Configuration failed \u2014 ' + resp.statusText);
         }
     } catch (e) {
-        console.error('Connect failed:', e);
+        showConnError('Network error \u2014 server not responding');
     }
 }
 
@@ -639,7 +741,34 @@ async function pollPlc() {
         const data = await resp.json();
         if (data.tags) {
             renderGrid('plcGrid', plcConfig, data.tags);
+
+            // Drive Digital I/O dots
+            const io = data.tags.io || {};
+            setIoDot('conveyor', io.conveyor);
+            setIoDot('emitter', io.emitter);
+            setIoDot('sensor_start', io.sensor_start);
+            setIoDot('sensor_end', io.sensor_end);
+            setIoDot('run_command', io.run_command);
+            setIoDot('di_center', io.di_center);
+            setIoDot('di_estop_no', io.di_estop_no);
+            setIoDot('di_estop_nc', io.di_estop_nc);
+            setIoDot('di_right', io.di_right);
+            setIoDot('di_green_btn', io.di_green_btn);
+            setIoDot('do_fwd', io.do_fwd);
+            setIoDot('do_rev', io.do_rev);
+            setIoDot('do_aux', io.do_aux);
+            setIoDot('fault_alarm', data.tags.fault_alarm ? 1 : 0);
+            setIoDot('e_stop_ok', data.tags.e_stop_ok ? 1 : 0);
+
             document.getElementById('plcDot').className = 'conn-dot ok';
+
+            // Clear error if PLC came back online
+            const line = document.getElementById('connStatusLine');
+            if (line.querySelector('span[style*="ff4444"]')) {
+                const ip = document.getElementById('plcIp').value.trim();
+                const port = document.getElementById('plcPort').value.trim();
+                collapseConnBar(ip, port);
+            }
         } else {
             document.getElementById('plcDot').className = 'conn-dot err';
         }
