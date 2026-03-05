@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Pi Factory Matrix API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="FactoryLM Matrix API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -507,7 +507,7 @@ HTML_DASHBOARD = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Factory — Matrix Dashboard</title>
+<title>FactoryLM — Matrix Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 16px; }
@@ -536,7 +536,7 @@ HTML_DASHBOARD = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>🏭 Pi Factory Matrix</h1>
+<h1>FactoryLM Matrix</h1>
 <p style="color:#888; font-size:0.85rem;">Live Dashboard | <a href="/video" style="color:#76b900;">🎬 Video Log</a></p>
 
 <div class="grid">
@@ -676,7 +676,7 @@ HTML_VIDEO_LOG = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Factory — Video Log</title>
+<title>FactoryLM — Video Log</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 16px; }

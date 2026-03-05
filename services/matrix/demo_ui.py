@@ -37,7 +37,7 @@ _mock_belt = MockBeltStatus()
 # Fault injection state for demo
 _injected_fault: str | None = None
 
-app = FastAPI(title="Pi Factory Demo", version="1.0.0")
+app = FastAPI(title="FactoryLM — Overhead Crane AI", version="1.0.0")
 
 
 # ============================================================================
@@ -252,7 +252,7 @@ async def demo_dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FactoryLM - Cosmos R2 Fault Diagnosis</title>
+    <title>FactoryLM — Overhead Crane AI</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -445,8 +445,8 @@ async def demo_dashboard():
 
     <div class="header">
         <div>
-            <h1>FactoryLM Dashboard</h1>
-            <p>Live Fault Diagnosis for Conveyor Cell</p>
+            <h1>FactoryLM — Overhead Crane AI</h1>
+            <p>Physical AI Safety System for Overhead Cranes &amp; Hoists</p>
         </div>
         <div class="conn-badge">
             <span class="conn-dot"></span>
@@ -602,7 +602,7 @@ async def demo_dashboard():
     </div>
 
     <div class="footer">
-        FactoryLM | Pipeline: Webcam + Modbus TCP &rarr; Cosmos Reason 2 (8B) &rarr; Physical AI Diagnosis
+        FactoryLM | Webcam + Modbus TCP &rarr; Cosmos Reason 2 (8B) &rarr; Crane Safety AI
     </div>
 
     <script>
