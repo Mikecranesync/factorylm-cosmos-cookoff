@@ -22,42 +22,43 @@
 ---
 
 > Overhead crane failures cause catastrophic load drops, fatalities, and million-dollar shutdowns.
-> Existing diagnostic tools cost $8,000/seat, have zero AI capability, and can't see what the
-> camera sees. **FactoryLM fuses live PLC telemetry with NVIDIA Cosmos Reason 2 vision intelligence
-> to detect hoist slip, brake fade, and speed mismatch before the load drops.**
+> Existing diagnostic tools cost $8,000/seat, have zero AI capability, and never correlate VFD
+> registers with encoder feedback. **FactoryLM fuses live VFD telemetry, encoder position, and PLC
+> state through NVIDIA Cosmos Reason 2 to detect hoist slip, brake fade, and speed mismatch
+> before the load drops.**
 
 ## The Problem
 
 - **Overhead cranes kill** — OSHA 1910.179 mandates daily-to-monthly inspections but provides no AI tooling
-- **Drum speed sensors** are not required by ASME B30.2 or CMAA, meaning most cranes have **no brake slip detection**
-- **Tier-1 crane OEMs** (Konecranes CraneBrain, Demag SmartFunctions) charge enterprise rates for features a maintenance tech could build with a webcam
+- **Most cranes lack closed-loop brake monitoring** — VFD registers and encoder data exist but are never correlated against commanded state
+- **Tier-1 crane OEMs** (Konecranes CraneBrain, Demag SmartFunctions) charge enterprise rates for register monitoring that FactoryLM does with open-source tooling
 - The crane predictive maintenance market is **$184M and growing at 9.81% CAGR** — almost entirely owned by proprietary OEM software
 
 ## What FactoryLM Does
 
 ```mermaid
 flowchart LR
-    A[Webcam\nDrum / Rope Markers] --> C
-    B[PLC Modbus TCP\nSpeed / Current / Brake] --> C
+    A[VFD Registers\nActual Freq · Current] --> C
+    B[PLC + Encoders\nCommand · Position · Brake] --> C
     C[Speed Fusion\nMismatch Detection] --> D
-    D[NVIDIA\nCosmos Reason 2\n8B Vision Model] --> E
+    D[NVIDIA\nCosmos Reason 2\n8B Reasoning Model] --> E
     E{Safety Decision}
     E -->|Normal| F[Monitor]
     E -->|Brake Slip\nHoist Drift| G[STOP MOTOR\nModbus Write]
     E -->|Overload\nOff-Center| H[Alert\n+ OSHA Log]
 ```
 
-**The closed loop:** Cosmos R2 watches tape markers on the hoist drum. It compares visual rope speed to the VFD commanded speed over Modbus TCP. If the brake is slipping — rope moving while motor is stopped — it writes Coil 0 to trigger an emergency stop. **This is the AI safety decision running in under 2 seconds on real hardware.**
+**The closed loop:** FactoryLM continuously reads VFD internal registers (actual frequency, output current) and encoder feedback over Modbus. It compares commanded speed to actual speed reported by the drive. If the brake is slipping — encoder shows movement while motor command is zero — it writes Coil 0 to trigger an emergency stop. Cosmos R2 then reasons across the full telemetry snapshot to produce a structured diagnosis. **Register-level detection in milliseconds, AI diagnosis in under 2 seconds, all on real hardware.**
 
 ## Fault Detection Capability
 
 | Fault | How Detected | OSHA 1910.179 Ref | Action |
 |---|---|---|---|
-| **Hoist brake slip** | Visual drum speed > 0 while motor stopped | (f)(3) Brakes | Emergency stop |
-| **Speed mismatch** | VFD commanded != visual rope speed | (f)(1) Hoisting | Reduce speed / alert |
-| **Motor overload** | Current draw vs load register | (f)(1) Motors | Alert + log |
+| **Hoist brake slip** | Encoder feedback > 0 while motor command = 0 | (f)(3) Brakes | Emergency stop |
+| **Speed mismatch** | VFD commanded freq != VFD actual freq register | (f)(1) Hoisting | Reduce speed / alert |
+| **Motor overload** | VFD output current register vs rated load | (f)(1) Motors | Alert + log |
 | **E-Stop failure** | Coil state mismatch after command | (g)(4) Limit switches | Critical alarm |
-| **Drift / creep** | Motion detected with zero command | (f)(3) Brakes | Emergency stop |
+| **Drift / creep** | Encoder position change with zero motor command | (f)(3) Brakes | Emergency stop |
 
 ## Quick Start (No Hardware Required)
 
@@ -91,7 +92,7 @@ python3 -m uvicorn services.matrix.demo_ui:app --port 8080 &
 |---|---|---|
 | PLC | Allen-Bradley Micro 820 | Motion control, fault registers, E-stop |
 | VFD | AutomationDirect GS10 | Hoist/travel speed control |
-| Vision | USB Webcam + tape markers | Drum speed, rope movement, visual inspection |
+| Encoders | Motor / hoist shaft encoders | Position feedback, brake slip detection |
 | Protocol | Modbus TCP :502 | Real-time tag reads at 5Hz, coil writes |
 | AI Engine | NVIDIA Cosmos Reason 2 8B | Cross-modal vision + telemetry reasoning |
 | Inference | vLLM on Vast.ai L40S | Sub-2-second diagnosis latency |
@@ -100,7 +101,7 @@ python3 -m uvicorn services.matrix.demo_ui:app --port 8080 &
 
 | Criterion | FactoryLM Answer |
 |---|---|
-| **Quality of Ideas** | Cross-modal fusion: webcam visual speed + live PLC telemetry analyzed simultaneously by Cosmos R2. First demo to close the loop — AI detects fault AND writes Modbus coil to stop hardware |
+| **Quality of Ideas** | Cross-modal fusion: VFD internal registers + encoder feedback + PLC telemetry analyzed simultaneously by Cosmos R2. First demo to close the loop — AI detects fault AND writes Modbus coil to stop hardware |
 | **Technical Implementation** | `--mock` mode runs with zero hardware. 12 unit tests. Modular architecture. Reproducible in 3 commands. Full whitepaper + user manual included |
 | **Design** | Live dashboard with SVG tachometer, fault injection buttons, Cosmos R2 chain-of-thought panel, MJPEG webcam feed, fault history timeline, full-screen demo mode |
 | **Impact** | Targets $5.73B overhead crane market. Replaces $8,000/seat OEM tools. OSHA 1910.179 compliance data built in. Built by a maintenance technician, for maintenance technicians |
@@ -111,7 +112,7 @@ Your conveyor demo proves the concept. But overhead cranes are where this become
 
 - A conveyor jam costs time. **A hoist brake slip drops the load.**
 - OSHA 1910.179 requires inspection documentation — FactoryLM generates it automatically
-- No ASME standard requires drum speed sensors — FactoryLM adds that capability with a $15 webcam
+- Most VFDs already report actual frequency and current — FactoryLM reads those registers and correlates them against commanded state
 - Every steel mill, shipyard, automotive plant, and warehouse has overhead cranes
 - Konecranes and Demag charge enterprise rates. **FactoryLM is open source.**
 
@@ -122,7 +123,7 @@ factorylm-cosmos-cookoff/
 ├── demo/                    # Unified CLI — python -m demo <subcommand>
 │   ├── __main__.py          # diagnose | dashboard | video-reel | test
 │   ├── diagnosis_engine.py  # Cosmos R2 multimodal prompt + response parser
-│   ├── speed_fusion.py      # Visual vs PLC speed mismatch detection
+│   ├── speed_fusion.py      # VFD actual vs commanded speed mismatch detection
 │   └── _paths.py            # PyInstaller-safe path resolution
 ├── cosmos/                  # Cosmos R2 API client + incident watcher
 ├── diagnosis/               # Rule-based fault classifier (12 fault codes)
