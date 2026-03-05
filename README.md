@@ -37,29 +37,21 @@ pip install requests pyyaml pymodbus mss
 # Set your vLLM endpoint (or use our default)
 export VLLM_URL=http://localhost:8001/v1/chat/completions
 
-# Diagnose a simulated conveyor jam
-python3 cookoff/diagnosis_engine.py \
-    --image cookoff/clips/screenshot.png \
-    --simulate-plc jam
+# Diagnose a simulated conveyor jam (MockPLC — no hardware needed)
+python -m demo diagnose --mock
 
 # Try other scenarios: normal, estop, overheat, idle
-python3 cookoff/diagnosis_engine.py \
-    --image cookoff/clips/screenshot.png \
-    --simulate-plc overheat
+python -m demo diagnose --simulate-plc overheat
 
 # Ask a specific question
-python3 cookoff/diagnosis_engine.py \
-    --image cookoff/clips/screenshot.png \
-    --simulate-plc jam \
+python -m demo diagnose --simulate-plc jam \
     --question "Is it safe to restart the conveyor?"
 ```
 
 ### Run against a live PLC
 
 ```bash
-python3 cookoff/diagnosis_engine.py \
-    --image cookoff/clips/screenshot.png \
-    --live-plc --plc-host 192.168.1.100
+python -m demo diagnose --live-plc --plc-host 192.168.1.100
 ```
 
 ---
@@ -167,8 +159,8 @@ From the live PLC test — R2 identified a **motor paradox** that neither video 
 ## Repository Structure
 
 ```
-factorylm-cosmos-cookoff/
-├── cookoff/                    # Cosmos Cookoff submission
+factorylm-cosmos-demo/
+├── demo/                    # Cosmos Cookoff submission
 │   ├── diagnosis_engine.py     # Core: image/video + PLC → Cosmos R2 → diagnosis
 │   ├── capture_fio.py          # Factory I/O screen capture (4 FPS MP4)
 │   ├── test_session.py         # Full test matrix runner
@@ -193,19 +185,19 @@ factorylm-cosmos-cookoff/
 
 | File | Purpose |
 |------|---------|
-| `cookoff/diagnosis_engine.py` | Multimodal diagnosis orchestrator (426 lines) |
-| `cookoff/prompts/factory_diagnosis.yaml` | System + user prompt templates for R2 |
+| `demo/diagnosis_engine.py` | Multimodal diagnosis orchestrator (426 lines) |
+| `demo/prompts/factory_diagnosis.yaml` | System + user prompt templates for R2 |
 | `diagnosis/conveyor_faults.py` | Deterministic fault classifier (8 codes) |
-| `cookoff/capture_fio.py` | Factory I/O screen capture |
+| `demo/capture_fio.py` | Factory I/O screen capture |
 | `config/factoryio.yaml` | Coil + register map for Micro 820 |
-| `cookoff/WHITEPAPER.md` | Full technical whitepaper |
+| `demo/WHITEPAPER.md` | Full technical whitepaper |
 
 ---
 
 ## Documentation
 
-- **[Technical Whitepaper](cookoff/WHITEPAPER.md)** — Full architecture, implementation, and validation results
-- **[User Manual](cookoff/USER_MANUAL.md)** — Operator guide for all components
+- **[Technical Whitepaper](demo/WHITEPAPER.md)** — Full architecture, implementation, and validation results
+- **[User Manual](demo/USER_MANUAL.md)** — Operator guide for all components
 - **[Conveyor of Destiny Playbook](docs/CONVEYOR_OF_DESTINY.md)** — Complete system playbook
 - **[Pi Factory Guide](pi-factory/PI_FACTORY_GUIDE.md)** — Hardware setup and deployment
 - **[Wiring Guide](docs/WIRING_GUIDE.md)** — PLC and VFD wiring diagrams
@@ -245,7 +237,7 @@ FACTORYLM_NET_MODE=sim python3 -m pytest tests/ -v
 
 # Run the full Cosmos test session
 export VLLM_URL=http://localhost:8001/v1/chat/completions
-python3 cookoff/test_session.py --quick --skip-plc
+python -m demo test --quick --skip-plc
 
 # Start Pi Factory gateway in sim mode
 FACTORYLM_NET_MODE=sim python3 -m uvicorn net.api.main:app --host 0.0.0.0 --port 8000
@@ -261,4 +253,4 @@ FACTORYLM_NET_MODE=sim python3 -m uvicorn net.api.main:app --host 0.0.0.0 --port
 
 *Built by [FactoryLM](https://factorylm.com) — making factories smarter, one diagnosis at a time.*
 
-*NVIDIA Cosmos Cookoff 2026 Entry | [Whitepaper](cookoff/WHITEPAPER.md) | [Demo Video](#)*
+*NVIDIA Cosmos Cookoff 2026 Entry | [Whitepaper](demo/WHITEPAPER.md) | [Demo Video](#)*

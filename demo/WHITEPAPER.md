@@ -163,7 +163,7 @@ FactoryLM Vision is organized as a four-layer stack:
 
 ## 3. Technical Implementation
 
-### 3.1 Video Capture: `cookoff/capture_fio.py`
+### 3.1 Video Capture: `demo/capture_fio.py`
 
 The screen recorder uses the `mss` library for low-overhead multi-monitor capture. Frames are
 captured at 4 FPS — matching the temporal density of Cosmos R2's training data — and assembled
@@ -171,7 +171,7 @@ into H.264-encoded MP4 files via `ffmpeg` with `libx264 / yuv420p` encoding, the
 expected by R2's vision encoder.
 
 ```
-python cookoff/capture_fio.py record --duration 15 --label box_jam
+python demo/capture_fio.py record --duration 15 --label box_jam
 ```
 
 Three operational modes are supported:
@@ -180,7 +180,7 @@ Three operational modes are supported:
 - `auto` — multi-scenario batch recording (operator advances through states manually)
 
 Output files follow the naming convention `{label}_{timestamp}.mp4` and are stored in
-`cookoff/clips/`.
+`demo/clips/`.
 
 ### 3.2 PLC Integration
 
@@ -243,7 +243,7 @@ The formatted output of this analysis is injected directly into the Cosmos R2 pr
 is told: "Here is what the rule engine found. Now look at the video and tell me if the visual
 evidence confirms or contradicts these findings."
 
-### 3.4 Cosmos Reason2-8B Integration: `cookoff/diagnosis_engine.py`
+### 3.4 Cosmos Reason2-8B Integration: `demo/diagnosis_engine.py`
 
 **Model:** `nvidia/Cosmos-Reason2-8B`
 **Serving:** vLLM 0.15.1 on Vast.ai L40S GPU, Virginia region ($0.53/hr spot pricing)
@@ -256,7 +256,7 @@ top_p       = 0.95
 max_tokens  = 4096   # sufficient for full chain-of-thought reasoning
 ```
 
-**Prompt architecture** (`cookoff/prompts/factory_diagnosis.yaml`):
+**Prompt architecture** (`demo/prompts/factory_diagnosis.yaml`):
 
 The system prompt establishes the model's role as a factory diagnostics AI. It is instructed to
 cross-reference visual observations with PLC telemetry and to flag discrepancies between the two
@@ -689,9 +689,9 @@ February 20, 2026).
 
 | File | Purpose |
 |------|---------|
-| `cookoff/capture_fio.py` | Screen recorder — 4 FPS MP4 capture from Factory I/O |
-| `cookoff/diagnosis_engine.py` | Orchestrator — builds multimodal prompt, calls R2, parses response |
-| `cookoff/prompts/factory_diagnosis.yaml` | Structured prompt templates (system + 3 user variants) |
+| `demo/capture_fio.py` | Screen recorder — 4 FPS MP4 capture from Factory I/O |
+| `demo/diagnosis_engine.py` | Orchestrator — builds multimodal prompt, calls R2, parses response |
+| `demo/prompts/factory_diagnosis.yaml` | Structured prompt templates (system + 3 user variants) |
 | `diagnosis/conveyor_faults.py` | Rule-based fault classifier — 8 fault codes, 4 severity levels |
 | `services/plc-modbus/src/factorylm_plc/micro820.py` | Allen-Bradley Micro 820 Modbus client |
 | `integrations/edge_gateway.py` | Cloud-to-edge Modbus polling via Tailscale |
@@ -707,37 +707,37 @@ February 20, 2026).
 pip install requests pyyaml pymodbus mss
 
 # Capture a Factory I/O screenshot
-python cookoff/capture_fio.py screenshot --label baseline
+python demo/capture_fio.py screenshot --label baseline
 
 # Run diagnosis with simulated jam data (no PLC required)
 VLLM_URL=http://<your-vllm-host>:8000/v1/chat/completions \
-    python cookoff/diagnosis_engine.py \
-    --image cookoff/clips/baseline_*.png \
+    python demo/diagnosis_engine.py \
+    --image demo/clips/baseline_*.png \
     --simulate-plc jam
 
 # Ask a specific question
-python cookoff/diagnosis_engine.py \
-    --image cookoff/clips/baseline_*.png \
+python demo/diagnosis_engine.py \
+    --image demo/clips/baseline_*.png \
     --simulate-plc estop \
     --question "Is it safe to restart the conveyor?"
 
 # Output as JSON for downstream processing
-python cookoff/diagnosis_engine.py \
-    --image cookoff/clips/baseline_*.png \
+python demo/diagnosis_engine.py \
+    --image demo/clips/baseline_*.png \
     --simulate-plc overheat \
     --json
 
 # Run diagnosis against a LIVE PLC (Micro 820 at 192.168.1.100:502)
 VLLM_URL=http://localhost:8000/v1/chat/completions \
-    python cookoff/diagnosis_engine.py \
-    --image cookoff/clips/baseline_*.png \
+    python demo/diagnosis_engine.py \
+    --image demo/clips/baseline_*.png \
     --plc-host 192.168.1.100 \
     --plc-port 502
 
 # Ask a specific question against live PLC data
 VLLM_URL=http://localhost:8000/v1/chat/completions \
-    python cookoff/diagnosis_engine.py \
-    --image cookoff/clips/baseline_*.png \
+    python demo/diagnosis_engine.py \
+    --image demo/clips/baseline_*.png \
     --plc-host 192.168.1.100 \
     --question "Is the conveyor running and why is the motor drawing so much current?"
 ```

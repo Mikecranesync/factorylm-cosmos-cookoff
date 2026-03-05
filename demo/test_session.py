@@ -6,22 +6,22 @@ Runs a full test matrix against the Cosmos R2 diagnosis pipeline.
 
 Usage:
     # Full test suite
-    python cookoff/test_session.py
+    python -m demo test
 
     # Skip vLLM (useful for infrastructure checks only)
-    python cookoff/test_session.py --skip-vllm
+    python -m demo test --skip-vllm
 
     # Skip PLC connectivity test
-    python cookoff/test_session.py --skip-plc
+    python -m demo test --skip-plc
 
     # Run only 2 scenarios (normal + jam) for a faster pass
-    python cookoff/test_session.py --quick
+    python -m demo test --quick
 
     # Combine flags
-    python cookoff/test_session.py --quick --skip-plc
+    python -m demo test --quick --skip-plc
 
 Importable API:
-    from cookoff.test_session import (
+    from demo.test_session import (
         check_prerequisites,
         check_vllm_endpoint,
         run_screenshot_test,
@@ -44,16 +44,15 @@ from typing import Optional
 # Repo-root path manipulation — same pattern as diagnosis_engine.py.
 # Must happen before importing siblings so their relative imports resolve.
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from demo._paths import BASE_PATH, CLIPS_DIR
+REPO_ROOT = BASE_PATH
 sys.path.insert(0, str(REPO_ROOT))
 
 # Import siblings.  diagnosis_engine wraps sys.stdout/stderr with utf-8
 # TextIOWrappers at its module level — this covers the Windows console encoding
 # fix for the whole process, so we do not re-wrap here.
-from cookoff import capture_fio          # noqa: E402
-from cookoff import diagnosis_engine     # noqa: E402
-
-CLIPS_DIR = REPO_ROOT / "cookoff" / "clips"
+from demo import capture_fio          # noqa: E402
+from demo import diagnosis_engine     # noqa: E402
 _VLLM_BASE = os.environ.get("VLLM_BASE_URL", os.environ.get("VLLM_URL", "http://localhost:8001/v1/chat/completions").rsplit("/chat/completions", 1)[0])
 VLLM_MODELS_URL = f"{_VLLM_BASE}/models"
 VLLM_CHAT_URL = f"{_VLLM_BASE}/chat/completions"
@@ -110,7 +109,7 @@ class TestResult:
 def check_prerequisites() -> TestResult:
     """
     Verify that all required Python packages are importable and that at least
-    one screenshot exists in cookoff/clips/.
+    one screenshot exists in demo/clips/.
     """
     result = TestResult("Prerequisites")
     required = ["pymodbus", "requests", "yaml", "mss"]

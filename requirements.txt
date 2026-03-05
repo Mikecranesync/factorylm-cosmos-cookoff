@@ -13,3 +13,4 @@ opcua
 python-multipart
 aiosqlite
 opencv-python
+python-dotenv

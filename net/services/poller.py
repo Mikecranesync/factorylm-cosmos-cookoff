@@ -167,10 +167,21 @@ class Poller:
     def _init_source(self):
         """Initialize tag source.
 
-        Priority: PLC_HOST env var > configured IP via .configure().
-        No PLC_HOST + no configured IP = poller idles (honest nulls).
+        Priority:
+          1. ETHIP_HOST env var → EtherNetIPTagSource (forced, skip Modbus)
+          2. PLC_HOST env var → ModbusTagSource, then EtherNet/IP fallback
+          3. Configured IP via .configure() → ModbusReader (generic template)
+          4. Nothing configured → poller idles (honest nulls)
         """
-        # PLC_HOST env var — highest priority, canonical Micro 820 map
+        # --- ETHIP_HOST: force EtherNet/IP directly ---
+        ethip_host = os.environ.get("ETHIP_HOST", "")
+        if ethip_host:
+            self._tag_source = self._try_ethip(ethip_host)
+            if self._tag_source:
+                return
+            logger.warning("ETHIP_HOST set but EtherNet/IP failed to connect")
+
+        # --- PLC_HOST: try Modbus first, then EtherNet/IP fallback ---
         plc_host = os.environ.get("PLC_HOST", "")
         if plc_host:
             plc_port = int(os.environ.get("PLC_PORT", "502"))
@@ -185,9 +196,15 @@ class Poller:
                 )
                 return
             logger.warning(
-                "ModbusTagSource failed to connect, falling through"
+                "ModbusTagSource failed to connect, trying EtherNet/IP fallback"
             )
             self._tag_source = None
+
+            # EtherNet/IP fallback on same host
+            self._tag_source = self._try_ethip(plc_host)
+            if self._tag_source:
+                return
+            logger.warning("EtherNet/IP fallback also failed for %s", plc_host)
 
         if not self._plc_ip:
             logger.warning("No PLC IP configured — poller idle")
@@ -205,6 +222,23 @@ class Poller:
             custom_names=self._custom_names,
         )
         logger.info("Poller using ModbusReader → %s:%d", self._plc_ip, self._plc_port)
+
+    @staticmethod
+    def _try_ethip(host: str) -> object | None:
+        """Try to connect via EtherNet/IP. Returns source or None."""
+        try:
+            from net.drivers.ethip_tag_source import EtherNetIPTagSource
+        except ImportError:
+            logger.debug("pycomm3 not available for EtherNet/IP fallback")
+            return None
+
+        source = EtherNetIPTagSource(host=host)
+        if source.connect():
+            logger.info(
+                "Poller using EtherNetIPTagSource → %s (EtherNet/IP)", host,
+            )
+            return source
+        return None
 
     def _poll_loop(self):
         """Main loop: 5Hz read, 1Hz history write.

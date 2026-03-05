@@ -473,7 +473,7 @@ curl http://localhost:8000/api/tags?seconds=60
 ## References
 
 1. FactoryLM Vision Whitepaper — NVIDIA Cosmos Cookoff 2026 entry.
-   `cookoff/WHITEPAPER.md`
+   `demo/WHITEPAPER.md`
 
 2. FastAPI — Modern, fast web framework for building APIs with Python 3.7+.
    https://fastapi.tiangolo.com

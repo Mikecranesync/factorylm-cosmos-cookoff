@@ -1,5 +1,5 @@
 # Cosmos R2 Prompt Template: Factory Floor Diagnosis
-# Used by cookoff/diagnosis_engine.py
+# Used by demo/diagnosis_engine.py
 #
 # Variables:
 #   {plc_registers}  - Formatted PLC register snapshot

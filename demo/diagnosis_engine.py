@@ -6,19 +6,19 @@ Orchestrates video/image + PLC registers → Cosmos R2 prompt → diagnosis.
 
 Usage:
     # Diagnose from an image (no PLC data)
-    python cookoff/diagnosis_engine.py --image cookoff/clips/screenshot.png
+    python -m demo diagnose --image demo/clips/screenshot.png
 
     # Diagnose with PLC register snapshot
-    python cookoff/diagnosis_engine.py --image cookoff/clips/screenshot.png --plc-json plc_snapshot.json
+    python -m demo diagnose --image demo/clips/screenshot.png --plc-json plc_snapshot.json
 
     # Diagnose with simulated PLC data (for testing without hardware)
-    python cookoff/diagnosis_engine.py --image cookoff/clips/screenshot.png --simulate-plc jam
+    python -m demo diagnose --image demo/clips/screenshot.png --simulate-plc jam
 
     # Ask a specific question
-    python cookoff/diagnosis_engine.py --image cookoff/clips/screenshot.png --question "Is the conveyor running?"
+    python -m demo diagnose --image demo/clips/screenshot.png --question "Is the conveyor running?"
 
     # Use video instead of image
-    python cookoff/diagnosis_engine.py --video cookoff/clips/normal_20260219.mp4
+    python -m demo diagnose --video demo/clips/normal_20260219.mp4
 
 Environment:
     VLLM_URL  - vLLM endpoint (default: http://localhost:8000/v1/chat/completions)
@@ -42,15 +42,14 @@ import requests
 import yaml
 
 # Add repo root to path
-REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT))
+from demo._paths import BASE_PATH, PROMPTS_PATH
+sys.path.insert(0, str(BASE_PATH))
 
 from diagnosis.conveyor_faults import detect_faults, format_diagnosis_for_technician
 
 # --- Configuration ---
 VLLM_URL = os.environ.get("VLLM_URL", "http://localhost:8000/v1/chat/completions")
 MODEL_NAME = "nvidia/Cosmos-Reason2-8B"
-PROMPTS_PATH = REPO_ROOT / "cookoff" / "prompts" / "factory_diagnosis.yaml"
 
 # Cosmos R2 recommended sampling for reasoning mode
 DEFAULT_TEMPERATURE = 0.6

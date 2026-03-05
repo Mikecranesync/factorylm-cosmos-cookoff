@@ -23,7 +23,14 @@ class CosmosClient:
     """HTTP client for NVIDIA Cosmos Reason 2 API with Llama fallback."""
 
     def __init__(self, config_path: str | None = None) -> None:
-        cfg_file = Path(config_path) if config_path else Path("config/cosmos.yaml")
+        if config_path:
+            cfg_file = Path(config_path)
+        else:
+            try:
+                from demo._paths import CONFIG_DIR
+                cfg_file = CONFIG_DIR / "cosmos.yaml"
+            except ImportError:
+                cfg_file = Path("config/cosmos.yaml")
         self.api_key: str = os.getenv("NVIDIA_COSMOS_API_KEY", "")
         self.api_base_url: str = "https://integrate.api.nvidia.com/v1"
         self.model: str = "nvidia/cosmos-reason2-8b"

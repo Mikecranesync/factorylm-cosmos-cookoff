@@ -92,8 +92,10 @@ motor_stopped = NOT coil[0]
 ```
 factorylm-cosmos-cookoff/
 ├── CLAUDE.md             # YOU ARE HERE — read this first
-├── cookoff/              # Cosmos Cookoff submission
+├── demo/                 # Cosmos Cookoff demo package (3-mode CLI)
+│   ├── __main__.py       # `python -m demo` entry point
 │   ├── diagnosis_engine.py  # Core: frame + PLC tags -> Cosmos prompt
+│   ├── _paths.py         # PyInstaller-safe path resolution
 │   ├── WHITEPAPER.md     # Technical whitepaper
 │   └── USER_MANUAL.md    # Setup guide
 ├── cosmos/               # Cosmos R2 client and agent
@@ -120,11 +122,11 @@ factorylm-cosmos-cookoff/
 | File | What It Does |
 |------|-------------|
 | `docs/CONVEYOR_OF_DESTINY.md` | Complete playbook: wiring, VFD, PLC, edge stack, internet control, safety |
-| `cookoff/diagnosis_engine.py` | Multimodal diagnosis: captures frame + reads PLC -> Cosmos R2 prompt |
+| `demo/diagnosis_engine.py` | Multimodal diagnosis: captures frame + reads PLC -> Cosmos R2 prompt |
 | `diagnosis/conveyor_faults.py` | 8-code fault classifier (E001-T002) |
 | `config/factoryio.yaml` | Modbus bridge config (coil/register mapping, poll interval) |
 | `services/matrix/app.py` | Dashboard + diagnosis API endpoint |
-| `cookoff/USER_MANUAL.md` | Full operator manual for all components |
+| `demo/USER_MANUAL.md` | Full operator manual for all components |
 
 ## Known Discrepancies
 
@@ -177,8 +179,11 @@ python server.py --port 8081
 # Start edge gateway with PLC + VFD + camera + CompactCom
 PLC_HOST=192.168.1.100 VFD_HOST=192.168.1.101 VIDEO_SOURCE=0 PI_COMPACTCOM_PORT=5020 python server.py --port 8081
 
+# Run diagnosis (MockPLC, no hardware)
+python -m demo diagnose --mock
+
 # Run diagnosis (live PLC)
-python cookoff/diagnosis_engine.py --live-plc --plc-ip 192.168.1.100
+python -m demo diagnose --live-plc --plc-host 192.168.1.100
 
 # Start Matrix API dashboard
 python -m uvicorn services.matrix.app:app --host 0.0.0.0 --port 8000

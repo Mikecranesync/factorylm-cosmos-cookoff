@@ -5,12 +5,12 @@ Factory I/O Screen Capture for Cosmos Cookoff
 Records Factory I/O window as MP4 clips at 4 FPS (matches Cosmos R2 training).
 
 Usage:
-    python cookoff/capture_fio.py record --duration 15 --label normal
-    python cookoff/capture_fio.py record --duration 30 --label box_jam
-    python cookoff/capture_fio.py screenshot --label snapshot_01
-    python cookoff/capture_fio.py auto --scenarios normal,jam,stop --duration 20
+    python -m demo capture record --duration 15 --label normal
+    python -m demo capture record --duration 30 --label box_jam
+    python -m demo capture screenshot --label snapshot_01
+    python -m demo capture auto --scenarios normal,jam,stop --duration 20
 
-Outputs to cookoff/clips/ as labeled MP4/PNG files.
+Outputs to demo/clips/ as labeled MP4/PNG files.
 """
 
 import argparse
@@ -23,10 +23,8 @@ import mss
 import mss.tools
 
 # Add repo root to path for imports
-REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT))
-
-CLIPS_DIR = REPO_ROOT / "cookoff" / "clips"
+from demo._paths import BASE_PATH, CLIPS_DIR
+sys.path.insert(0, str(BASE_PATH))
 CLIPS_DIR.mkdir(parents=True, exist_ok=True)
 
 TARGET_FPS = 4

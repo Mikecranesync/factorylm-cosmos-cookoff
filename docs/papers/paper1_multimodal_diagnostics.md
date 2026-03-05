@@ -321,10 +321,10 @@ We presented FactoryLM Vision, a multimodal industrial fault diagnostics system 
 
 | File | Role in System |
 |------|---------------|
-| `cookoff/diagnosis_engine.py` | Orchestrator: prompt construction, media encoding, R2 API call, response parsing |
+| `demo/diagnosis_engine.py` | Orchestrator: prompt construction, media encoding, R2 API call, response parsing |
 | `diagnosis/conveyor_faults.py` | Deterministic 8-rule fault classifier with FaultDiagnosis dataclass |
-| `cookoff/prompts/factory_diagnosis.yaml` | System prompt + 3 user prompt templates |
-| `cookoff/capture_fio.py` | Screen recorder: 4 FPS H.264 capture from Factory I/O |
+| `demo/prompts/factory_diagnosis.yaml` | System prompt + 3 user prompt templates |
+| `demo/capture_fio.py` | Screen recorder: 4 FPS H.264 capture from Factory I/O |
 | `config/factoryio.yaml` | Coil and register map for the "From A to B" scene |
 | `cosmos/client.py` | Cosmos R2 API client with fallback logic |
 | `docs/CONVEYOR_OF_DESTINY.md` | Hardware specs, wiring guide, Modbus maps, safety model |

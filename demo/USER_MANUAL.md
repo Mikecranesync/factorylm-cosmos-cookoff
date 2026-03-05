@@ -225,35 +225,35 @@ Make sure Factory I/O is running with the "From A to B" scene visible on your sc
 **Take a single screenshot:**
 
 ```bash
-python cookoff/capture_fio.py screenshot --label my_test
+python demo/capture_fio.py screenshot --label my_test
 ```
 
-Output is saved to `cookoff/clips/my_test_<timestamp>.png`.
+Output is saved to `demo/clips/my_test_<timestamp>.png`.
 
 **Record a 15-second video clip at 4 FPS:**
 
 ```bash
-python cookoff/capture_fio.py record --duration 15 --label normal_run
+python demo/capture_fio.py record --duration 15 --label normal_run
 ```
 
-Output is saved to `cookoff/clips/normal_run_<timestamp>.mp4`.
+Output is saved to `demo/clips/normal_run_<timestamp>.mp4`.
 
 **Record multiple scenarios in sequence (interactive):**
 
 ```bash
-python cookoff/capture_fio.py auto --scenarios normal,jam,stop --duration 20
+python demo/capture_fio.py auto --scenarios normal,jam,stop --duration 20
 ```
 
 The tool will prompt you to set up each scenario in Factory I/O and press Enter before each recording starts.
 
-All output files are stored in `cookoff/clips/`.
+All output files are stored in `demo/clips/`.
 
 ### Step 5: Run a Diagnosis
 
 **Diagnose with simulated PLC data (no hardware required):**
 
 ```bash
-python cookoff/diagnosis_engine.py --image cookoff/clips/my_test_*.png --simulate-plc jam
+python demo/diagnosis_engine.py --image demo/clips/my_test_*.png --simulate-plc jam
 ```
 
 This uses the built-in "jam" scenario (see Section 6) as PLC data, sends the image to Cosmos R2, and prints the chain-of-thought reasoning and diagnosis.
@@ -261,7 +261,7 @@ This uses the built-in "jam" scenario (see Section 6) as PLC data, sends the ima
 **Diagnose with live Micro 820 PLC (Ethernet cable must be connected):**
 
 ```bash
-python cookoff/diagnosis_engine.py --image cookoff/clips/my_test_*.png --live-plc
+python demo/diagnosis_engine.py --image demo/clips/my_test_*.png --live-plc
 ```
 
 The engine reads coils 0-17 and holding registers 100-105 from the PLC at `192.168.1.100:502` and injects the live snapshot into the prompt.
@@ -269,19 +269,19 @@ The engine reads coils 0-17 and holding registers 100-105 from the PLC at `192.1
 **Ask a specific question:**
 
 ```bash
-python cookoff/diagnosis_engine.py --image cookoff/clips/my_test_*.png --live-plc --question "Is the conveyor running?"
+python demo/diagnosis_engine.py --image demo/clips/my_test_*.png --live-plc --question "Is the conveyor running?"
 ```
 
 **Use a video clip instead of a still image:**
 
 ```bash
-python cookoff/diagnosis_engine.py --video cookoff/clips/normal_run_*.mp4 --simulate-plc normal
+python demo/diagnosis_engine.py --video demo/clips/normal_run_*.mp4 --simulate-plc normal
 ```
 
 **Output as JSON for programmatic use:**
 
 ```bash
-python cookoff/diagnosis_engine.py --image cookoff/clips/my_test_*.png --simulate-plc normal --json
+python demo/diagnosis_engine.py --image demo/clips/my_test_*.png --simulate-plc normal --json
 ```
 
 JSON output includes `reasoning`, `diagnosis`, `raw_response`, `usage` (token counts), and `elapsed_s`.
@@ -291,7 +291,7 @@ JSON output includes `reasoning`, `diagnosis`, `raw_response`, `usage` (token co
 ```
 FactoryLM Vision — Cosmos R2 Diagnosis Engine
 ============================================================
-Media: cookoff/clips/my_test_20260220_143012.png
+Media: demo/clips/my_test_20260220_143012.png
 PLC: simulated:jam
 Question: general diagnosis
 Endpoint: http://localhost:8000/v1/chat/completions
@@ -334,12 +334,12 @@ vastai show instances
 
 ### 4.1 capture_fio.py
 
-Located at `cookoff/capture_fio.py`. All output goes to `cookoff/clips/`.
+Located at `demo/capture_fio.py`. All output goes to `demo/clips/`.
 
 **Subcommand: screenshot**
 
 ```
-python cookoff/capture_fio.py screenshot [options]
+python demo/capture_fio.py screenshot [options]
 ```
 
 | Flag | Default | Description |
@@ -352,7 +352,7 @@ Output filename format: `{label}_{YYYYMMDD_HHMMSS}.png`
 **Subcommand: record**
 
 ```
-python cookoff/capture_fio.py record [options]
+python demo/capture_fio.py record [options]
 ```
 
 | Flag | Default | Description |
@@ -369,7 +369,7 @@ The recorder captures frames as individual PNGs at the target FPS, then assemble
 **Subcommand: auto**
 
 ```
-python cookoff/capture_fio.py auto [options]
+python demo/capture_fio.py auto [options]
 ```
 
 | Flag | Default | Description |
@@ -381,10 +381,10 @@ The `auto` subcommand iterates through each scenario label, prompts you to confi
 
 ### 4.2 diagnosis_engine.py
 
-Located at `cookoff/diagnosis_engine.py`.
+Located at `demo/diagnosis_engine.py`.
 
 ```
-python cookoff/diagnosis_engine.py --image <path> | --video <path> [options]
+python demo/diagnosis_engine.py --image <path> | --video <path> [options]
 ```
 
 **Media input (mutually exclusive, one required):**
@@ -696,7 +696,7 @@ Faults are sorted by severity before being injected into the prompt: EMERGENCY f
 
 ## 8. Prompt Architecture
 
-All prompt templates are stored in `cookoff/prompts/factory_diagnosis.yaml`. The engine selects the appropriate template based on what data is available.
+All prompt templates are stored in `demo/prompts/factory_diagnosis.yaml`. The engine selects the appropriate template based on what data is available.
 
 ### Template Selection Logic
 
@@ -834,9 +834,9 @@ The parsed `reasoning` and `diagnosis` fields are returned separately, allowing 
 
 | File | Purpose |
 |------|---------|
-| `cookoff/capture_fio.py` | Screen recorder — 4 FPS MP4 or PNG from Factory I/O window |
-| `cookoff/diagnosis_engine.py` | Orchestrator — builds multimodal prompt, calls R2, parses response |
-| `cookoff/prompts/factory_diagnosis.yaml` | Structured prompt templates (system + 3 user variants) |
+| `demo/capture_fio.py` | Screen recorder — 4 FPS MP4 or PNG from Factory I/O window |
+| `demo/diagnosis_engine.py` | Orchestrator — builds multimodal prompt, calls R2, parses response |
+| `demo/prompts/factory_diagnosis.yaml` | Structured prompt templates (system + 3 user variants) |
 | `diagnosis/conveyor_faults.py` | Rule-based fault classifier — 8 fault codes, 4 severity levels |
 | `config/factoryio.yaml` | Coil and register map, poll interval, matrix URL |
 | `services/plc-modbus/CLAUDE.md` | Micro 820 hardware config and coil map reference |
@@ -990,10 +990,10 @@ Alternatively, if you only need images, use `screenshot` mode instead of `record
 
 ### "File not found" for image or video path
 
-Shell glob patterns like `cookoff/clips/my_test_*.png` are expanded by the shell, not Python. If you get "File not found", the glob did not match anything. Check that the capture completed successfully and that the file exists in `cookoff/clips/`:
+Shell glob patterns like `demo/clips/my_test_*.png` are expanded by the shell, not Python. If you get "File not found", the glob did not match anything. Check that the capture completed successfully and that the file exists in `demo/clips/`:
 
 ```bash
-ls cookoff/clips/
+ls demo/clips/
 ```
 
 Use the full filename with timestamp in the diagnosis command, or use a shell that expands globs (bash, not Windows cmd.exe).
