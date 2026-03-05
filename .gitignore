@@ -47,3 +47,6 @@ coverage/
 
 # Serena AI agent cache
 .serena/
+.env.demo
+*.db-shm
+*.db-wal
