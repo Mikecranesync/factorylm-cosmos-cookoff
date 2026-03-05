@@ -54,6 +54,15 @@ python -m demo diagnose --simulate-plc jam \
 python -m demo diagnose --live-plc --plc-host 192.168.1.100
 ```
 
+### Launch the live dashboard
+
+```bash
+# Full dashboard with webcam, speed fusion, fault injection, Cosmos R2 diagnosis
+pip install fastapi uvicorn httpx opencv-python-headless
+python3 -m uvicorn services.matrix.demo_ui:app --port 8080
+# Open http://localhost:8080 — Ctrl+F for fullscreen demo mode
+```
+
 ---
 
 ## Architecture
